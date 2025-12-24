@@ -1,0 +1,124 @@
+import { z } from "zod";
+
+export const profileRequirementFieldTypeSchema = z.enum([
+  "text",
+  "number",
+  "dropdown",
+  "url",
+  "document",
+  "checkbox",
+]);
+
+export const profileRequirementSchema = z
+  .object({
+    fields: z
+      .array(
+        z.object({
+          key: z.string().min(1),
+          label: z.string().min(1),
+          type: profileRequirementFieldTypeSchema,
+          required: z.boolean().optional().default(false),
+          options: z.array(z.string().min(1)).optional(),
+        })
+      )
+      .default([]),
+  })
+  .strict();
+
+export type ProfileRequirementSchema = z.infer<typeof profileRequirementSchema>;
+
+export function validateSubmittedDataOrThrow(params: {
+  requirements: unknown;
+  submittedData: unknown;
+  uploadedDocumentFieldKeys: Set<string>;
+}) {
+  const parsedReq = profileRequirementSchema.parse(params.requirements ?? { fields: [] });
+
+  const submitted = (params.submittedData ?? {}) as Record<string, unknown>;
+
+  for (const field of parsedReq.fields) {
+    const value = submitted[field.key];
+
+    if (field.type === "document") {
+      const hasDoc = params.uploadedDocumentFieldKeys.has(field.key);
+      if (field.required && !hasDoc) {
+        const err = new Error(`MISSING_REQUIRED_DOCUMENT:${field.key}`);
+        (err as any).code = "MISSING_REQUIRED_DOCUMENT";
+        throw err;
+      }
+      continue;
+    }
+
+    if (value == null) {
+      if (field.required) {
+        const err = new Error(`MISSING_REQUIRED_FIELD:${field.key}`);
+        (err as any).code = "MISSING_REQUIRED_FIELD";
+        throw err;
+      }
+      continue;
+    }
+
+    if (field.type === "text") {
+      if (typeof value !== "string" || value.trim().length === 0) {
+        const err = new Error(`INVALID_FIELD:${field.key}`);
+        (err as any).code = "INVALID_FIELD";
+        throw err;
+      }
+      continue;
+    }
+
+    if (field.type === "url") {
+      if (typeof value !== "string" || value.trim().length === 0) {
+        const err = new Error(`INVALID_FIELD:${field.key}`);
+        (err as any).code = "INVALID_FIELD";
+        throw err;
+      }
+      try {
+        // eslint-disable-next-line no-new
+        new URL(value);
+      } catch {
+        const err = new Error(`INVALID_FIELD:${field.key}`);
+        (err as any).code = "INVALID_FIELD";
+        throw err;
+      }
+      continue;
+    }
+
+    if (field.type === "number") {
+      if (typeof value !== "number" || Number.isNaN(value)) {
+        const err = new Error(`INVALID_FIELD:${field.key}`);
+        (err as any).code = "INVALID_FIELD";
+        throw err;
+      }
+      continue;
+    }
+
+    if (field.type === "checkbox") {
+      if (typeof value !== "boolean") {
+        const err = new Error(`INVALID_FIELD:${field.key}`);
+        (err as any).code = "INVALID_FIELD";
+        throw err;
+      }
+      if (field.required && value !== true) {
+        const err = new Error(`INVALID_FIELD:${field.key}`);
+        (err as any).code = "INVALID_FIELD";
+        throw err;
+      }
+      continue;
+    }
+
+    if (field.type === "dropdown") {
+      if (typeof value !== "string" || value.trim().length === 0) {
+        const err = new Error(`INVALID_FIELD:${field.key}`);
+        (err as any).code = "INVALID_FIELD";
+        throw err;
+      }
+      if (field.options && !field.options.includes(value)) {
+        const err = new Error(`INVALID_FIELD:${field.key}`);
+        (err as any).code = "INVALID_FIELD";
+        throw err;
+      }
+      continue;
+    }
+  }
+}

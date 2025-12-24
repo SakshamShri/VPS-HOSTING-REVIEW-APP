@@ -1,0 +1,433 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  USER
+}
+
+enum Country {
+  INDIA
+  BRAZIL
+}
+
+enum YesNo {
+  YES
+  NO
+}
+
+enum AdminCuratedLevel {
+  YES
+  NO
+  PARTIAL
+}
+
+enum CategoryStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum CategoryDomain {
+  POLL
+  PROFILE
+}
+
+enum ProfileCategoryLevel {
+  ROOT
+  SUB
+  PROFILE_PARENT
+}
+
+enum ProfileAdminCuratedMode {
+  FULL
+  PARTIAL
+  NONE
+}
+
+model Category {
+  id                 BigInt             @id @default(autoincrement())
+  name_en            String
+  name_local         String?            @db.VarChar(255)
+  description        String?            @db.Text
+
+  domain             CategoryDomain     @default(POLL)
+  profile_level      ProfileCategoryLevel?
+
+  profile_claimable       YesNo?
+  profile_request_allowed YesNo?
+  profile_admin_curated   ProfileAdminCuratedMode?
+
+  is_parent          Boolean
+  parent_id          BigInt?
+  parent             Category?          @relation("CategoryChildren", fields: [parent_id], references: [id])
+  children           Category[]         @relation("CategoryChildren")
+
+  claimable_default        YesNo
+  request_allowed_default  YesNo
+  admin_curated_default    AdminCuratedLevel
+
+  claimable          YesNo?
+  request_allowed    YesNo?
+  admin_curated      AdminCuratedLevel?
+
+  claim_requirements   Json?
+  request_requirements Json?
+
+  status             CategoryStatus
+  display_order      Int                @default(0)
+  notes              String?            @db.Text
+
+  created_at         DateTime           @default(now())
+  updated_at         DateTime           @updatedAt
+
+  pollConfigs        PollConfig[]
+  polls              Poll[]
+  userPolls          UserPoll[]
+  profiles           Profile[]
+  profileRequests     ProfileRequest[]  @relation("ProfileRequestCategory")
+
+  @@unique([domain, name_en])
+}
+
+enum ProfileStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum ProfileClaimStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ProfileRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Profile {
+  id                 BigInt        @id @default(autoincrement())
+  name               String
+  category_id        BigInt
+  category           Category      @relation(fields: [category_id], references: [id])
+  status             ProfileStatus @default(ACTIVE)
+  is_claimed         Boolean       @default(false)
+  claimed_by_user_id BigInt?
+  claimed_by_user    User?         @relation("ProfileClaimedBy", fields: [claimed_by_user_id], references: [id])
+  created_at         DateTime      @default(now())
+  updated_at         DateTime      @updatedAt
+
+  claims             ProfileClaim[]
+  approvedRequests   ProfileRequest[] @relation("ApprovedProfile")
+  followers          ProfileFollower[]
+
+  @@unique([category_id, name])
+}
+
+model ProfileClaim {
+  id                   BigInt             @id @default(autoincrement())
+  profile_id           BigInt
+  profile              Profile            @relation(fields: [profile_id], references: [id])
+  user_id              BigInt
+  user                 User               @relation(fields: [user_id], references: [id])
+  submitted_data       Json
+  status               ProfileClaimStatus @default(PENDING)
+  created_at           DateTime           @default(now())
+  reviewed_at          DateTime?
+  reviewed_by_admin_id BigInt?
+  reviewed_by_admin    AdminCredentials?  @relation("ProfileClaimReviewedByAdmin", fields: [reviewed_by_admin_id], references: [id])
+  review_reason        String?            @db.Text
+
+  documents            ProfileSubmissionDocument[] @relation("ClaimDocuments")
+
+  @@unique([profile_id, user_id, status])
+}
+
+model ProfileRequest {
+  id                   BigInt               @id @default(autoincrement())
+  parent_category_id   BigInt
+  parent_category      Category             @relation("ProfileRequestCategory", fields: [parent_category_id], references: [id])
+  requested_name       String
+  user_id              BigInt
+  user                 User                 @relation(fields: [user_id], references: [id])
+  submitted_data       Json
+  status               ProfileRequestStatus @default(PENDING)
+  approved_profile_id  BigInt?
+  approved_profile     Profile?             @relation("ApprovedProfile", fields: [approved_profile_id], references: [id])
+  created_at           DateTime             @default(now())
+  reviewed_at          DateTime?
+  reviewed_by_admin_id BigInt?
+  reviewed_by_admin    AdminCredentials?    @relation("ProfileRequestReviewedByAdmin", fields: [reviewed_by_admin_id], references: [id])
+  review_reason        String?              @db.Text
+
+  documents            ProfileSubmissionDocument[] @relation("RequestDocuments")
+}
+
+model ProfileSubmissionDocument {
+  id            BigInt   @id @default(autoincrement())
+  claim_id      BigInt?
+  claim         ProfileClaim?   @relation("ClaimDocuments", fields: [claim_id], references: [id])
+  request_id    BigInt?
+  request       ProfileRequest? @relation("RequestDocuments", fields: [request_id], references: [id])
+  field_key     String
+  original_name String
+  mime_type     String
+  size_bytes    Int
+  storage_path  String
+  created_at    DateTime @default(now())
+}
+
+model ProfileFollower {
+  id         BigInt   @id @default(autoincrement())
+  profile_id BigInt
+  profile    Profile  @relation(fields: [profile_id], references: [id])
+  user_id    BigInt
+  user       User     @relation(fields: [user_id], references: [id])
+  created_at DateTime @default(now())
+
+  @@unique([profile_id, user_id])
+}
+
+enum PollConfigStatus {
+  DRAFT
+  ACTIVE
+  DISABLED
+}
+
+enum PollUiTemplate {
+  STANDARD_LIST
+  YES_NO
+  RATING
+  SWIPE
+  POINT_ALLOC
+  MEDIA_COMPARE
+}
+
+enum PollStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+model PollConfig {
+  id          BigInt           @id @default(autoincrement())
+  name        String
+  slug        String           @unique
+  status      PollConfigStatus @default(DRAFT)
+
+  category_id BigInt
+  category    Category         @relation(fields: [category_id], references: [id])
+
+  ui_template PollUiTemplate
+
+  theme       Json
+  rules       Json
+  permissions Json
+
+  version     Int              @default(1)
+  created_at  DateTime         @default(now())
+  updated_at  DateTime         @updatedAt
+
+  polls       Poll[]
+  votes       Vote[]
+}
+
+model Poll {
+  id             BigInt     @id @default(autoincrement())
+  title          String
+  description    String?    @db.Text
+
+  poll_config_id BigInt
+  pollConfig     PollConfig @relation(fields: [poll_config_id], references: [id])
+
+  category_id    BigInt
+  category       Category   @relation(fields: [category_id], references: [id])
+
+  status         PollStatus @default(DRAFT)
+  start_at       DateTime?
+  end_at         DateTime?
+
+  created_at     DateTime   @default(now())
+  updated_at     DateTime   @updatedAt
+
+  invites        Invite[]
+  votes          Vote[]
+}
+
+model User {
+  id          BigInt    @id @default(autoincrement())
+  role        UserRole
+  mobile      String?   @db.VarChar(32)
+  identity_verified Boolean @default(false)
+  is_verified Boolean   @default(false)
+  country     Country?
+  created_at  DateTime  @default(now())
+
+  profile     UserProfile?
+  votes       Vote[]
+  deviceLogs  DeviceLog[]
+  userPolls   UserPoll[]       @relation("UserPollCreator")
+  inviteGroups UserInviteGroup[]
+  userPollInvites UserPollInvite[]
+  claimedProfiles Profile[] @relation("ProfileClaimedBy")
+  profileClaims  ProfileClaim[]
+  profileRequests ProfileRequest[]
+  profileFollowers ProfileFollower[]
+}
+
+model AdminCredentials {
+  id            BigInt   @id @default(autoincrement())
+  username      String   @unique
+  password_hash String
+  role          UserRole
+  is_active     Boolean  @default(true)
+
+  profileClaimsReviewed   ProfileClaim[]   @relation("ProfileClaimReviewedByAdmin")
+  profileRequestsReviewed ProfileRequest[] @relation("ProfileRequestReviewedByAdmin")
+}
+
+model OtpSession {
+  id         BigInt   @id @default(autoincrement())
+  mobile     String   @db.VarChar(32)
+  otp        String   @db.VarChar(16)
+  expires_at DateTime
+  verified   Boolean  @default(false)
+  created_at DateTime @default(now())
+}
+
+model UserProfile {
+  user_id            BigInt  @id
+  user               User    @relation(fields: [user_id], references: [id])
+  name               String
+  age                Int
+  address            String?
+  current_location   String?
+  permanent_address  String?
+}
+
+model Invite {
+  id         BigInt   @id @default(autoincrement())
+  poll_id    BigInt
+  poll       Poll     @relation(fields: [poll_id], references: [id])
+  token      String   @unique
+  created_at DateTime @default(now())
+
+  votes      Vote[]
+}
+
+model Vote {
+  id             BigInt     @id @default(autoincrement())
+  poll_id        BigInt
+  poll           Poll       @relation(fields: [poll_id], references: [id])
+  poll_config_id BigInt
+  pollConfig     PollConfig @relation(fields: [poll_config_id], references: [id])
+  user_id        BigInt?
+  user           User?      @relation(fields: [user_id], references: [id])
+  invite_id      BigInt?
+  invite         Invite?    @relation(fields: [invite_id], references: [id])
+  response       Json
+  created_at     DateTime   @default(now())
+
+  @@unique([poll_id, user_id])
+  @@unique([poll_id, invite_id])
+}
+
+model DeviceLog {
+  id            BigInt   @id @default(autoincrement())
+  user_id       BigInt?
+  role          UserRole
+  ip_address    String?  @db.VarChar(64)
+  user_agent    String?  @db.Text
+  device_type   String?  @db.VarChar(64)
+  os            String?  @db.VarChar(128)
+  browser       String?  @db.VarChar(128)
+  is_new_device Boolean  @default(false)
+  created_at    DateTime @default(now())
+  user          User?    @relation(fields: [user_id], references: [id])
+}
+
+enum UserPollType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  RATING
+  YES_NO
+}
+
+enum UserPollStatus {
+  DRAFT
+  LIVE
+  SCHEDULED
+  CLOSED
+}
+
+model UserPoll {
+  id             BigInt        @id @default(autoincrement())
+  creator_id     BigInt
+  creator        User          @relation("UserPollCreator", fields: [creator_id], references: [id])
+  category_id    BigInt?
+  category       Category?     @relation(fields: [category_id], references: [id])
+  title          String
+  description    String?       @db.Text
+  source_info    String?       @db.Text
+  type           UserPollType
+  status         UserPollStatus
+  is_invite_only Boolean       @default(true)
+  start_at       DateTime?
+  end_at         DateTime?
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+
+  options        UserPollOption[]
+  invites        UserPollInvite[]
+}
+
+model UserPollOption {
+  id            BigInt   @id @default(autoincrement())
+  poll_id       BigInt
+  poll          UserPoll @relation(fields: [poll_id], references: [id])
+  label         String
+  display_order Int
+}
+
+model UserInviteGroup {
+  id         BigInt                 @id @default(autoincrement())
+  owner_id   BigInt
+  owner      User                   @relation(fields: [owner_id], references: [id])
+  name       String
+  created_at DateTime               @default(now())
+
+  members    UserInviteGroupMember[]
+}
+
+model UserInviteGroupMember {
+  id        BigInt         @id @default(autoincrement())
+  group_id  BigInt
+  group     UserInviteGroup @relation(fields: [group_id], references: [id])
+  mobile    String          @db.VarChar(32)
+}
+
+model UserPollInvite {
+  id         BigInt   @id @default(autoincrement())
+  poll_id    BigInt
+  poll       UserPoll @relation(fields: [poll_id], references: [id])
+  mobile     String   @db.VarChar(32)
+  token      String   @unique
+  user_id    BigInt?
+  user       User?    @relation(fields: [user_id], references: [id])
+  status     UserPollInviteStatus @default(PENDING)
+  created_at DateTime @default(now())
+}
+
+enum UserPollInviteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}

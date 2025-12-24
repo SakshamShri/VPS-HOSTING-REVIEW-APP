@@ -1,0 +1,18 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.userRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const user_controller_1 = require("../controllers/user.controller");
+const feed_controller_1 = require("../controllers/feed.controller");
+const userCategory_controller_1 = require("../controllers/userCategory.controller");
+const userPoll_controller_1 = require("../controllers/userPoll.controller");
+exports.userRouter = (0, express_1.Router)();
+exports.userRouter.post("/user/profile", auth_middleware_1.requireUser, user_controller_1.saveProfileHandler);
+exports.userRouter.get("/user/feed", auth_middleware_1.requireUser, (req, res) => feed_controller_1.feedController.listUserFeed(req, res));
+exports.userRouter.get("/user/categories/claimable", auth_middleware_1.requireUser, (req, res) => (0, userCategory_controller_1.listUserClaimableCategoriesHandler)(req, res));
+exports.userRouter.post("/user/polls", auth_middleware_1.requireUser, userPoll_controller_1.createUserPollHandler);
+exports.userRouter.post("/user/polls/:id/invites", auth_middleware_1.requireUser, userPoll_controller_1.createUserPollInvitesHandler);
+exports.userRouter.post("/user/polls/:id/owner-invite", auth_middleware_1.requireUser, userPoll_controller_1.createUserPollOwnerInviteHandler);
+exports.userRouter.get("/user/groups", auth_middleware_1.requireUser, userPoll_controller_1.listUserGroupsHandler);
+exports.userRouter.post("/user/groups", auth_middleware_1.requireUser, userPoll_controller_1.createUserGroupHandler);

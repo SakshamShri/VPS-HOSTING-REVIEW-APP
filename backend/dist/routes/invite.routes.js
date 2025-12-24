@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.inviteRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const invite_controller_1 = require("../controllers/invite.controller");
+exports.inviteRouter = (0, express_1.Router)();
+exports.inviteRouter.get("/invites/validate", invite_controller_1.validateInviteHandler);
+exports.inviteRouter.post("/invites/accept", auth_middleware_1.requireUser, invite_controller_1.acceptInviteHandler);
+exports.inviteRouter.post("/invites/reject", auth_middleware_1.requireUser, invite_controller_1.rejectInviteHandler);

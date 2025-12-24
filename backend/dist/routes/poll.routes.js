@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.pollRouter = void 0;
+const express_1 = require("express");
+const poll_controller_1 = require("../controllers/poll.controller");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+exports.pollRouter = (0, express_1.Router)();
+exports.pollRouter.post("/polls", auth_middleware_1.requireAdmin, (req, res) => poll_controller_1.pollController.create(req, res));
+exports.pollRouter.put("/polls/:id", auth_middleware_1.requireAdmin, (req, res) => poll_controller_1.pollController.update(req, res));
+exports.pollRouter.get("/polls", auth_middleware_1.requireAdmin, (req, res) => poll_controller_1.pollController.list(req, res));
+exports.pollRouter.get("/polls/:id", auth_middleware_1.requireAdmin, (req, res) => poll_controller_1.pollController.getById(req, res));
+exports.pollRouter.get("/polls/:id/vote-details", (req, res) => poll_controller_1.pollController.getForVote(req, res));
+exports.pollRouter.post("/polls/:id/publish", auth_middleware_1.requireAdmin, (req, res) => poll_controller_1.pollController.publish(req, res));
+exports.pollRouter.post("/polls/:id/close", auth_middleware_1.requireAdmin, (req, res) => poll_controller_1.pollController.close(req, res));
+exports.pollRouter.post("/polls/:id/vote", (req, res) => poll_controller_1.pollController.vote(req, res));

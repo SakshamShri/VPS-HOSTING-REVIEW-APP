@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.pollConfigRouter = void 0;
+const express_1 = require("express");
+const pollConfig_controller_1 = require("../controllers/pollConfig.controller");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+exports.pollConfigRouter = (0, express_1.Router)();
+exports.pollConfigRouter.post("/poll-configs", auth_middleware_1.requireAdmin, (req, res) => pollConfig_controller_1.pollConfigController.create(req, res));
+exports.pollConfigRouter.put("/poll-configs/:id", auth_middleware_1.requireAdmin, (req, res) => pollConfig_controller_1.pollConfigController.update(req, res));
+exports.pollConfigRouter.get("/poll-configs", auth_middleware_1.requireAdmin, (req, res) => pollConfig_controller_1.pollConfigController.list(req, res));
+exports.pollConfigRouter.get("/poll-configs/:id", auth_middleware_1.requireAdmin, (req, res) => pollConfig_controller_1.pollConfigController.getById(req, res));
+exports.pollConfigRouter.post("/poll-configs/:id/clone", auth_middleware_1.requireAdmin, (req, res) => pollConfig_controller_1.pollConfigController.clone(req, res));
+exports.pollConfigRouter.post("/poll-configs/:id/publish", auth_middleware_1.requireAdmin, (req, res) => pollConfig_controller_1.pollConfigController.publish(req, res));
