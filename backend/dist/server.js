@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+require("dotenv/config");
 const app_1 = require("./app");
 const superAdmin_seed_1 = require("./seed/superAdmin.seed");
 // Ensure BigInt values from Prisma can be safely serialized in JSON responses

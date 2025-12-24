@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createApp = createApp;
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
+const path_1 = __importDefault(require("path"));
 const category_routes_1 = require("./routes/category.routes");
 const pollConfig_routes_1 = require("./routes/pollConfig.routes");
 const poll_routes_1 = require("./routes/poll.routes");
@@ -16,12 +17,24 @@ const invite_routes_1 = require("./routes/invite.routes");
 const profileSystem_routes_1 = require("./routes/profileSystem.routes");
 function createApp() {
     const app = (0, express_1.default)();
+    const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
     app.use((0, cors_1.default)({
-        origin: "http://localhost:5173",
-        methods: ["GET", "POST", "PUT", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization"],
+        origin: FRONTEND_ORIGIN,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+        credentials: true,
+        optionsSuccessStatus: 204,
+    }));
+    // Explicitly handle CORS preflight for all routes
+    app.options("*", (0, cors_1.default)({
+        origin: FRONTEND_ORIGIN,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+        credentials: true,
+        optionsSuccessStatus: 204,
     }));
     app.use(express_1.default.json());
+    app.use("/uploads", express_1.default.static(path_1.default.join(process.cwd(), "uploads")));
     app.use(health_routes_1.healthRouter);
     app.use(category_routes_1.categoryRouter);
     app.use(pollConfig_routes_1.pollConfigRouter);

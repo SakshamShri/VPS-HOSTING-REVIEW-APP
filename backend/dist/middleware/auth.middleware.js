@@ -40,7 +40,9 @@ function requireUser(req, res, next) {
         if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });
         }
-        if (req.user.role === "USER") {
+        // Allow any authenticated account (USER, ADMIN, SUPER_ADMIN) to access user routes.
+        // This keeps the UX simple while still requiring a valid JWT.
+        if (req.user.role === "USER" || req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN") {
             return next();
         }
         return res.status(403).json({ message: "Forbidden" });

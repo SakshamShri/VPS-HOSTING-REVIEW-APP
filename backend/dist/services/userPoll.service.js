@@ -231,6 +231,45 @@ class UserPollService {
             members: group.members.map((m) => m.mobile),
         };
     }
+    async updateGroupForUser(userId, groupId, name, mobiles) {
+        const existing = await db_1.prisma.userInviteGroup.findFirst({
+            where: { id: groupId, owner_id: userId },
+        });
+        if (!existing) {
+            const err = new Error("GROUP_NOT_FOUND");
+            err.code = "GROUP_NOT_FOUND";
+            throw err;
+        }
+        await db_1.prisma.$transaction(async (tx) => {
+            await tx.userInviteGroup.update({
+                where: { id: groupId },
+                data: { name },
+            });
+            await tx.userInviteGroupMember.deleteMany({ where: { group_id: groupId } });
+            if (mobiles.length > 0) {
+                await tx.userInviteGroupMember.createMany({
+                    data: mobiles.map((m) => ({
+                        group_id: groupId,
+                        mobile: normalizeMobile(m),
+                    })),
+                });
+            }
+        });
+        const updated = await db_1.prisma.userInviteGroup.findUnique({
+            where: { id: groupId },
+            include: { members: true },
+        });
+        if (!updated) {
+            const err = new Error("GROUP_NOT_FOUND");
+            err.code = "GROUP_NOT_FOUND";
+            throw err;
+        }
+        return {
+            id: updated.id.toString(),
+            name: updated.name,
+            members: updated.members.map((m) => m.mobile),
+        };
+    }
 }
 exports.UserPollService = UserPollService;
 exports.userPollService = new UserPollService();

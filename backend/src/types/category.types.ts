@@ -22,7 +22,10 @@ export interface CategoryCreateDTO {
   psi_parameters?: unknown | null;
 }
 
-export type CategoryUpdateDTO = Partial<CategoryCreateDTO>;
+export interface CategoryUpdateDTO
+  extends Partial<Omit<CategoryCreateDTO, "parent_id">> {
+  parent_id?: CategoryId | null;
+}
 
 export interface CategoryTreeNodeDTO {
   id: CategoryId;

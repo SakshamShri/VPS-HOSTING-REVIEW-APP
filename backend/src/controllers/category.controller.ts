@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { categoryService } from "../services/category.service";
-import type { CategoryId } from "../types/category.types";
+import type { CategoryId, CategoryUpdateDTO } from "../types/category.types";
 
 const idParamSchema = z.object({ id: z.string() });
 

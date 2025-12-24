@@ -28,8 +28,7 @@ class AuthService {
         return { token, role: admin.role };
     }
     async sendOtp(input) {
-        // For development we keep a fixed OTP for a specific test number to simplify flows.
-        const otp = input.mobile === "9680105678" ? "1234" : generateOtp();
+        const otp = generateOtp();
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
         await db_1.prisma.otpSession.create({
             data: {

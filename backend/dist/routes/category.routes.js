@@ -7,6 +7,7 @@ const auth_middleware_1 = require("../middleware/auth.middleware");
 exports.categoryRouter = (0, express_1.Router)();
 exports.categoryRouter.post("/categories", auth_middleware_1.requireAdmin, (req, res) => category_controller_1.categoryController.create(req, res));
 exports.categoryRouter.put("/categories/:id", auth_middleware_1.requireAdmin, (req, res) => category_controller_1.categoryController.update(req, res));
+exports.categoryRouter.delete("/categories/:id", auth_middleware_1.requireAdmin, (req, res) => category_controller_1.categoryController.delete(req, res));
 exports.categoryRouter.get("/categories/tree", auth_middleware_1.requireAdmin, (req, res) => category_controller_1.categoryController.getTree(req, res));
 exports.categoryRouter.get("/categories/:id/effective", auth_middleware_1.requireAdmin, (req, res) => category_controller_1.categoryController.getEffective(req, res));
 exports.categoryRouter.post("/categories/:id/preview-impact", auth_middleware_1.requireAdmin, (req, res) => category_controller_1.categoryController.previewImpact(req, res));

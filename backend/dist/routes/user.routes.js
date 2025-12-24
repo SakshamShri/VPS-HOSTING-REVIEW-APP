@@ -16,3 +16,4 @@ exports.userRouter.post("/user/polls/:id/invites", auth_middleware_1.requireUser
 exports.userRouter.post("/user/polls/:id/owner-invite", auth_middleware_1.requireUser, userPoll_controller_1.createUserPollOwnerInviteHandler);
 exports.userRouter.get("/user/groups", auth_middleware_1.requireUser, userPoll_controller_1.listUserGroupsHandler);
 exports.userRouter.post("/user/groups", auth_middleware_1.requireUser, userPoll_controller_1.createUserGroupHandler);
+exports.userRouter.patch("/user/groups/:id", auth_middleware_1.requireUser, userPoll_controller_1.updateUserGroupHandler);

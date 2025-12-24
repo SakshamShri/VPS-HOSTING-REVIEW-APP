@@ -129,7 +129,8 @@ export class ProfileSystemController {
         photo_url: relativePath,
       });
 
-      res.json({ photo_url: updated.photo_url });
+      const updatedAny = updated as any;
+      res.json({ photo_url: updatedAny.photo_url ?? relativePath });
     } catch (err) {
       if (err instanceof z.ZodError) {
         res.status(400).json({ message: "Invalid payload", issues: err.errors });

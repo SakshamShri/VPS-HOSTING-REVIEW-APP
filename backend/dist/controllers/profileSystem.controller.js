@@ -28,6 +28,8 @@ const createProfileSchema = zod_1.z.object({
 });
 const updateProfileSchema = zod_1.z.object({
     status: zod_1.z.enum(["ACTIVE", "DISABLED"]).optional(),
+    about: zod_1.z.string().max(5000).optional().nullable(),
+    photo_url: zod_1.z.string().max(2048).optional().nullable(),
 });
 const approveRejectSchema = zod_1.z.object({
     reason: zod_1.z.string().min(1).optional(),
@@ -84,6 +86,35 @@ class ProfileSystemController {
             }
             if (err?.code === "P2002") {
                 res.status(409).json({ message: "Category name must be unique in this domain" });
+                return;
+            }
+            throw err;
+        }
+    }
+    async adminUploadProfilePhoto(req, res) {
+        try {
+            const id = parseId(req);
+            const file = req.file;
+            if (!file) {
+                res.status(400).json({ message: "No file uploaded" });
+                return;
+            }
+            // Store as a relative URL under /uploads so frontend can render directly
+            const relativePath = `/uploads/profile-photos/${file.path.split("profile-photos").pop()}`;
+            const updated = await profileSystem_service_1.profileSystemService.updateProfileAdmin(id, {
+                photo_url: relativePath,
+            });
+            const updatedAny = updated;
+            res.json({ photo_url: updatedAny.photo_url ?? relativePath });
+        }
+        catch (err) {
+            if (err instanceof zod_1.z.ZodError) {
+                res.status(400).json({ message: "Invalid payload", issues: err.errors });
+                return;
+            }
+            const code = err?.code;
+            if (code === "PROFILE_NOT_FOUND") {
+                res.status(404).json({ message: "Profile not found" });
                 return;
             }
             throw err;
@@ -170,6 +201,8 @@ class ProfileSystemController {
             const body = updateProfileSchema.parse(req.body);
             const updated = await profileSystem_service_1.profileSystemService.updateProfileAdmin(id, {
                 status: body.status,
+                about: body.about ?? undefined,
+                photo_url: body.photo_url ?? undefined,
             });
             res.json(updated);
         }
@@ -370,6 +403,10 @@ class ProfileSystemController {
                 res.status(404).json({ message: "Profile not found" });
                 return;
             }
+            if (code === "IDENTITY_NOT_VERIFIED") {
+                res.status(403).json({ message: "Identity verification required to claim a profile" });
+                return;
+            }
             if (code === "ALREADY_CLAIMED") {
                 res.status(409).json({ message: "Profile already claimed" });
                 return;
@@ -426,6 +463,10 @@ class ProfileSystemController {
                 res.status(403).json({ message: "Request not allowed" });
                 return;
             }
+            if (code === "IDENTITY_NOT_VERIFIED") {
+                res.status(403).json({ message: "Identity verification required to request a profile" });
+                return;
+            }
             if (code === "PROFILE_ALREADY_EXISTS") {
                 res.status(409).json({ message: "Profile already exists" });
                 return;
@@ -444,6 +485,68 @@ class ProfileSystemController {
         }
         const result = await profileSystem_service_1.profileSystemService.listUserSubmissions(req.user.id);
         res.json(result);
+    }
+    async userListPublicProfiles(_req, res) {
+        const profiles = await profileSystem_service_1.profileSystemService.listPublicProfilesForUser();
+        res.json({ profiles });
+    }
+    async userGetPublicProfile(req, res) {
+        try {
+            const id = parseId(req);
+            const userId = req.user ? req.user.id : null;
+            const profile = await profileSystem_service_1.profileSystemService.getPublicProfileForUserWithFollow(userId, id);
+            res.json({ profile });
+        }
+        catch (err) {
+            const code = err?.code;
+            if (code === "PROFILE_NOT_FOUND") {
+                res.status(404).json({ message: "Profile not found" });
+                return;
+            }
+            throw err;
+        }
+    }
+    async userFollowProfile(req, res) {
+        if (!req.user) {
+            res.status(401).json({ message: "Unauthorized" });
+            return;
+        }
+        try {
+            const id = parseId(req);
+            const result = await profileSystem_service_1.profileSystemService.followProfile(req.user.id, id);
+            res.json(result);
+        }
+        catch (err) {
+            const code = err?.code;
+            if (code === "PROFILE_NOT_FOUND") {
+                res.status(404).json({ message: "Profile not found" });
+                return;
+            }
+            if (code === "PROFILE_DISABLED") {
+                res.status(400).json({ message: "Profile is disabled" });
+                return;
+            }
+            throw err;
+        }
+    }
+    async userUnfollowProfile(req, res) {
+        if (!req.user) {
+            res.status(401).json({ message: "Unauthorized" });
+            return;
+        }
+        try {
+            const id = parseId(req);
+            const result = await profileSystem_service_1.profileSystemService.unfollowProfile(req.user.id, id);
+            res.json(result);
+        }
+        catch (err) {
+            const code = err?.code;
+            if (code === "PROFILE_NOT_FOUND") {
+                res.status(404).json({ message: "Profile not found" });
+                return;
+            }
+            throw err;
+        }
     }
     async adminDownloadDocument(req, res) {
         try {

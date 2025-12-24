@@ -13,6 +13,19 @@ function parseBigIntId(value) {
         throw err;
     }
 }
+async function assertUserIdentityVerifiedOrThrow(userId) {
+    const user = await db_1.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+        const err = new Error("USER_NOT_FOUND");
+        err.code = "USER_NOT_FOUND";
+        throw err;
+    }
+    if (!user.identity_verified) {
+        const err = new Error("IDENTITY_NOT_VERIFIED");
+        err.code = "IDENTITY_NOT_VERIFIED";
+        throw err;
+    }
+}
 function normalizeLevel(level) {
     if (level === "PROFILE_PARENT")
         return { is_parent: false };
@@ -20,7 +33,7 @@ function normalizeLevel(level) {
 }
 async function getProfileCategoryOrThrow(id) {
     const category = await db_1.prisma.category.findUnique({ where: { id } });
-    if (!category || category.domain !== "PROFILE") {
+    if (!category) {
         const err = new Error("CATEGORY_NOT_FOUND");
         err.code = "CATEGORY_NOT_FOUND";
         throw err;
@@ -196,10 +209,23 @@ class ProfileSystemService {
     async createProfileAdmin(input) {
         const categoryId = parseBigIntId(input.category_id);
         const category = await getProfileCategoryOrThrow(categoryId);
-        if (category.profile_level !== "PROFILE_PARENT") {
-            const err = new Error("INVALID_PROFILE_CATEGORY");
-            err.code = "INVALID_PROFILE_CATEGORY";
-            throw err;
+        const domain = category.domain;
+        // For legacy PROFILE-domain categories, enforce profile_level = PROFILE_PARENT.
+        if (domain === "PROFILE") {
+            if (category.profile_level !== "PROFILE_PARENT") {
+                const err = new Error("INVALID_PROFILE_CATEGORY");
+                err.code = "INVALID_PROFILE_CATEGORY";
+                throw err;
+            }
+        }
+        else {
+            // For POLL categories, allow profiles only on child categories (sub categories),
+            // i.e. categories where is_parent = false.
+            if (category.is_parent) {
+                const err = new Error("INVALID_PROFILE_CATEGORY");
+                err.code = "INVALID_PROFILE_CATEGORY";
+                throw err;
+            }
         }
         const created = await db_1.prisma.profile.create({
             data: {
@@ -212,11 +238,18 @@ class ProfileSystemService {
     }
     async updateProfileAdmin(id, patch) {
         const profileId = parseBigIntId(id);
+        const data = {
+            status: patch.status ?? undefined,
+        };
+        if (patch.about !== undefined) {
+            data.about = patch.about;
+        }
+        if (patch.photo_url !== undefined) {
+            data.photo_url = patch.photo_url;
+        }
         const updated = await db_1.prisma.profile.update({
             where: { id: profileId },
-            data: {
-                status: patch.status ?? undefined,
-            },
+            data,
         });
         return updated;
     }
@@ -279,6 +312,8 @@ class ProfileSystemService {
         };
     }
     async submitProfileClaim(params) {
+        // Only fully identity-verified users can submit profile claims.
+        await assertUserIdentityVerifiedOrThrow(params.userId);
         const profileId = parseBigIntId(params.profileId);
         const profile = await db_1.prisma.profile.findUnique({
             where: { id: profileId },
@@ -292,7 +327,7 @@ class ProfileSystemService {
             throw err;
         }
         const category = profile.category;
-        if (!category || category.domain !== "PROFILE") {
+        if (!category) {
             const err = new Error("PROFILE_NOT_FOUND");
             err.code = "PROFILE_NOT_FOUND";
             throw err;
@@ -350,6 +385,8 @@ class ProfileSystemService {
         return { id: created.id.toString(), status: created.status };
     }
     async submitProfileRequest(params) {
+        // Only fully identity-verified users can submit profile requests.
+        await assertUserIdentityVerifiedOrThrow(params.userId);
         const categoryId = parseBigIntId(params.categoryId);
         const category = await getProfileCategoryOrThrow(categoryId);
         if (category.profile_level !== "PROFILE_PARENT") {
@@ -455,6 +492,133 @@ class ProfileSystemService {
                 approved_profile_id: r.approved_profile_id ? r.approved_profile_id.toString() : null,
             })),
         };
+    }
+    // Public profile listing for users (used by /profiles UI)
+    async listPublicProfilesForUser() {
+        const profiles = await db_1.prisma.profile.findMany({
+            where: {
+                status: "ACTIVE",
+            },
+            include: {
+                category: true,
+            },
+            orderBy: {
+                created_at: "desc",
+            },
+        });
+        return profiles.map((p) => ({
+            id: p.id.toString(),
+            name: p.name,
+            is_claimed: p.is_claimed,
+            claimed_by_user_id: p.claimed_by_user_id ? p.claimed_by_user_id.toString() : null,
+            category: p.category
+                ? {
+                    id: p.category.id.toString(),
+                    name: p.category.name_en,
+                }
+                : null,
+            created_at: p.created_at,
+            photo_url: p.photo_url ?? null,
+            about: p.about ?? null,
+        }));
+    }
+    async getPublicProfileForUser(profileIdRaw) {
+        const profileId = parseBigIntId(profileIdRaw);
+        const profile = await db_1.prisma.profile.findUnique({
+            where: { id: profileId },
+            include: {
+                category: true,
+            },
+        });
+        if (!profile) {
+            const err = new Error("PROFILE_NOT_FOUND");
+            err.code = "PROFILE_NOT_FOUND";
+            throw err;
+        }
+        const followerCount = await db_1.prisma.profileFollower.count({
+            where: { profile_id: profile.id },
+        });
+        return {
+            id: profile.id.toString(),
+            name: profile.name,
+            is_claimed: profile.is_claimed,
+            claimed_by_user_id: profile.claimed_by_user_id
+                ? profile.claimed_by_user_id.toString()
+                : null,
+            category: profile.category
+                ? {
+                    id: profile.category.id.toString(),
+                    name: profile.category.name_en,
+                }
+                : null,
+            created_at: profile.created_at,
+            status: profile.status,
+            follower_count: followerCount,
+            photo_url: profile.photo_url ?? null,
+            about: profile.about ?? null,
+        };
+    }
+    async getPublicProfileForUserWithFollow(userId, profileIdRaw) {
+        const base = await this.getPublicProfileForUser(profileIdRaw);
+        let isFollowing = false;
+        if (userId) {
+            const profileId = parseBigIntId(profileIdRaw);
+            const existing = await db_1.prisma.profileFollower.findFirst({
+                where: { profile_id: profileId, user_id: userId },
+            });
+            isFollowing = !!existing;
+        }
+        return {
+            ...base,
+            is_following: isFollowing,
+        };
+    }
+    async followProfile(userId, profileIdRaw) {
+        const profileId = parseBigIntId(profileIdRaw);
+        const profile = await db_1.prisma.profile.findUnique({ where: { id: profileId } });
+        if (!profile) {
+            const err = new Error("PROFILE_NOT_FOUND");
+            err.code = "PROFILE_NOT_FOUND";
+            throw err;
+        }
+        if (profile.status !== "ACTIVE") {
+            const err = new Error("PROFILE_DISABLED");
+            err.code = "PROFILE_DISABLED";
+            throw err;
+        }
+        try {
+            await db_1.prisma.profileFollower.create({
+                data: {
+                    profile_id: profileId,
+                    user_id: userId,
+                },
+            });
+        }
+        catch (err) {
+            // Ignore unique constraint violations so follow is idempotent
+            if (err?.code !== "P2002") {
+                throw err;
+            }
+        }
+        const count = await db_1.prisma.profileFollower.count({ where: { profile_id: profileId } });
+        return { follower_count: count };
+    }
+    async unfollowProfile(userId, profileIdRaw) {
+        const profileId = parseBigIntId(profileIdRaw);
+        const profile = await db_1.prisma.profile.findUnique({ where: { id: profileId } });
+        if (!profile) {
+            const err = new Error("PROFILE_NOT_FOUND");
+            err.code = "PROFILE_NOT_FOUND";
+            throw err;
+        }
+        await db_1.prisma.profileFollower.deleteMany({
+            where: {
+                profile_id: profileId,
+                user_id: userId,
+            },
+        });
+        const count = await db_1.prisma.profileFollower.count({ where: { profile_id: profileId } });
+        return { follower_count: count };
     }
     async listPendingClaimsAdmin(status) {
         const where = {};

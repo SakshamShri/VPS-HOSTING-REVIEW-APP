@@ -312,13 +312,19 @@ export class ProfileSystemService {
     patch: Partial<{ status: ProfileStatus; about: string | null; photo_url: string | null }>
   ) {
     const profileId = parseBigIntId(id);
+    const data: any = {
+      status: patch.status ?? undefined,
+    };
+    if (patch.about !== undefined) {
+      data.about = patch.about;
+    }
+    if (patch.photo_url !== undefined) {
+      data.photo_url = patch.photo_url;
+    }
+
     const updated = await prisma.profile.update({
       where: { id: profileId },
-      data: {
-        status: patch.status ?? undefined,
-        about: patch.about !== undefined ? patch.about : undefined,
-        photo_url: patch.photo_url !== undefined ? patch.photo_url : undefined,
-      },
+      data,
     });
     return updated;
   }
@@ -636,8 +642,8 @@ export class ProfileSystemService {
           }
         : null,
       created_at: p.created_at,
-      photo_url: p.photo_url ?? null,
-      about: p.about ?? null,
+      photo_url: (p as any).photo_url ?? null,
+      about: (p as any).about ?? null,
     }));
   }
 
@@ -676,8 +682,8 @@ export class ProfileSystemService {
       created_at: profile.created_at,
       status: profile.status,
       follower_count: followerCount,
-      photo_url: profile.photo_url ?? null,
-      about: profile.about ?? null,
+      photo_url: (profile as any).photo_url ?? null,
+      about: (profile as any).about ?? null,
     };
   }
 

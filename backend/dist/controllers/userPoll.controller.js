@@ -5,6 +5,7 @@ exports.createUserPollOwnerInviteHandler = createUserPollOwnerInviteHandler;
 exports.createUserPollInvitesHandler = createUserPollInvitesHandler;
 exports.listUserGroupsHandler = listUserGroupsHandler;
 exports.createUserGroupHandler = createUserGroupHandler;
+exports.updateUserGroupHandler = updateUserGroupHandler;
 const client_1 = require("@prisma/client");
 const zod_1 = require("zod");
 const userPoll_service_1 = require("../services/userPoll.service");
@@ -31,6 +32,10 @@ const createInvitesSchema = zod_1.z.object({
         .nullable(),
 });
 const createGroupSchema = zod_1.z.object({
+    name: zod_1.z.string().min(1),
+    mobiles: zod_1.z.array(zod_1.z.string().min(1)).min(1),
+});
+const updateGroupSchema = zod_1.z.object({
     name: zod_1.z.string().min(1),
     mobiles: zod_1.z.array(zod_1.z.string().min(1)).min(1),
 });
@@ -207,5 +212,31 @@ async function createUserGroupHandler(req, res) {
         // eslint-disable-next-line no-console
         console.error(err);
         return res.status(500).json({ message: "Failed to create group" });
+    }
+}
+async function updateUserGroupHandler(req, res) {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        const groupIdParam = req.params.id;
+        if (!groupIdParam) {
+            return res.status(400).json({ message: "Group id is required" });
+        }
+        const groupId = BigInt(groupIdParam);
+        const parsed = updateGroupSchema.parse(req.body);
+        const group = await userPoll_service_1.userPollService.updateGroupForUser(req.user.id, groupId, parsed.name, parsed.mobiles);
+        return res.status(200).json({ group });
+    }
+    catch (err) {
+        if (err instanceof zod_1.z.ZodError) {
+            return res.status(400).json({ message: "Invalid payload", issues: err.errors });
+        }
+        if (err?.code === "GROUP_NOT_FOUND") {
+            return res.status(404).json({ message: "Group not found" });
+        }
+        // eslint-disable-next-line no-console
+        console.error(err);
+        return res.status(500).json({ message: "Failed to update group" });
     }
 }

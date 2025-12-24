@@ -5,6 +5,7 @@ const express_1 = require("express");
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const profileSystem_controller_1 = require("../controllers/profileSystem.controller");
 const profileUpload_1 = require("../utils/profileUpload");
+const profilePhotoUpload_1 = require("../utils/profilePhotoUpload");
 exports.profileSystemRouter = (0, express_1.Router)();
 exports.profileSystemRouter.get("/profile/categories/tree", auth_middleware_1.requireAdmin, (req, res) => profileSystem_controller_1.profileSystemController.adminListCategories(req, res));
 exports.profileSystemRouter.post("/profile/categories", auth_middleware_1.requireAdmin, (req, res) => profileSystem_controller_1.profileSystemController.adminCreateCategory(req, res));
@@ -12,6 +13,7 @@ exports.profileSystemRouter.put("/profile/categories/:id", auth_middleware_1.req
 exports.profileSystemRouter.get("/profile/profiles", auth_middleware_1.requireAdmin, (req, res) => profileSystem_controller_1.profileSystemController.adminListProfiles(req, res));
 exports.profileSystemRouter.post("/profile/profiles", auth_middleware_1.requireAdmin, (req, res) => profileSystem_controller_1.profileSystemController.adminCreateProfile(req, res));
 exports.profileSystemRouter.put("/profile/profiles/:id", auth_middleware_1.requireAdmin, (req, res) => profileSystem_controller_1.profileSystemController.adminUpdateProfile(req, res));
+exports.profileSystemRouter.post("/profile/profiles/:id/photo", auth_middleware_1.requireAdmin, profilePhotoUpload_1.profilePhotoUpload.single("photo"), (req, res) => profileSystem_controller_1.profileSystemController.adminUploadProfilePhoto(req, res));
 exports.profileSystemRouter.get("/profile/review/claims", auth_middleware_1.requireAdmin, (req, res) => profileSystem_controller_1.profileSystemController.adminListClaims(req, res));
 exports.profileSystemRouter.post("/profile/review/claims/:id/approve", auth_middleware_1.requireAdmin, (req, res) => profileSystem_controller_1.profileSystemController.adminApproveClaim(req, res));
 exports.profileSystemRouter.post("/profile/review/claims/:id/reject", auth_middleware_1.requireAdmin, (req, res) => profileSystem_controller_1.profileSystemController.adminRejectClaim(req, res));
@@ -24,4 +26,8 @@ exports.profileSystemRouter.get("/user/profile/categories/:id/profiles", auth_mi
 exports.profileSystemRouter.post("/user/profile/profiles/:id/claim", auth_middleware_1.requireUser, profileUpload_1.profileSubmissionUpload.any(), (req, res) => profileSystem_controller_1.profileSystemController.userSubmitClaim(req, res));
 exports.profileSystemRouter.post("/user/profile/categories/:id/request", auth_middleware_1.requireUser, profileUpload_1.profileSubmissionUpload.any(), (req, res) => profileSystem_controller_1.profileSystemController.userSubmitRequest(req, res));
 exports.profileSystemRouter.get("/user/profile/submissions", auth_middleware_1.requireUser, (req, res) => profileSystem_controller_1.profileSystemController.userListSubmissions(req, res));
+exports.profileSystemRouter.get("/user/public-profiles", auth_middleware_1.requireUser, (req, res) => profileSystem_controller_1.profileSystemController.userListPublicProfiles(req, res));
+exports.profileSystemRouter.get("/user/public-profiles/:id", auth_middleware_1.requireUser, (req, res) => profileSystem_controller_1.profileSystemController.userGetPublicProfile(req, res));
+exports.profileSystemRouter.post("/user/public-profiles/:id/follow", auth_middleware_1.requireUser, (req, res) => profileSystem_controller_1.profileSystemController.userFollowProfile(req, res));
+exports.profileSystemRouter.post("/user/public-profiles/:id/unfollow", auth_middleware_1.requireUser, (req, res) => profileSystem_controller_1.profileSystemController.userUnfollowProfile(req, res));
 exports.profileSystemRouter.get("/user/profile/documents/:id/download", auth_middleware_1.requireUser, (req, res) => profileSystem_controller_1.profileSystemController.userDownloadDocument(req, res));

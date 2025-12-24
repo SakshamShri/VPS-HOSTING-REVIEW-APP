@@ -33,6 +33,15 @@ class CategoryService {
     async updateCategory(id, payload) {
         return category_repository_1.categoryRepository.update(id, payload);
     }
+    async deleteCategory(id) {
+        const children = await category_repository_1.categoryRepository.findChildren(id);
+        if (children.length > 0) {
+            const err = new Error("CATEGORY_HAS_CHILDREN");
+            err.code = "CATEGORY_HAS_CHILDREN";
+            throw err;
+        }
+        await category_repository_1.categoryRepository.delete(id);
+    }
     async getCategoryTree(domain = "POLL") {
         const flat = await category_repository_1.categoryRepository.findTree(domain);
         return buildTree(flat);

@@ -299,7 +299,7 @@ export function TicketCenterPage() {
                           <>
                             <Button
                               type="button"
-                              size="xs"
+                              size="sm"
                               className="h-6 px-2 text-[11px]"
                               onClick={() =>
                                 isClaim
@@ -311,7 +311,7 @@ export function TicketCenterPage() {
                             </Button>
                             <Button
                               type="button"
-                              size="xs"
+                              size="sm"
                               variant="outline"
                               className="h-6 px-2 text-[11px]"
                               onClick={() =>

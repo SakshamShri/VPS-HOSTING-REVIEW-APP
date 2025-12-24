@@ -23,6 +23,9 @@ const categoryCreateSchema = zod_1.z.object({
     status: statusEnum,
     display_order: zod_1.z.number().int().optional(),
     notes: zod_1.z.string().optional().nullable(),
+    claim_requirements: zod_1.z.unknown().optional().nullable(),
+    request_requirements: zod_1.z.unknown().optional().nullable(),
+    psi_parameters: zod_1.z.unknown().optional().nullable(),
 });
 const categoryUpdateSchema = categoryCreateSchema.partial();
 const parentDefaultsSchema = zod_1.z.object({
@@ -38,14 +41,21 @@ function parseId(req) {
 class CategoryController {
     async create(req, res) {
         const body = categoryCreateSchema.parse(req.body);
-        let parentId = null;
+        if (body.is_parent === false && (!body.parent_id || body.parent_id.trim() === "")) {
+            res.status(400).json({ message: "Child category must have a parent_id." });
+            return;
+        }
+        let parentId;
         if (body.parent_id != null) {
             try {
                 parentId = BigInt(body.parent_id);
             }
             catch {
-                parentId = null;
+                parentId = undefined;
             }
+        }
+        else {
+            parentId = undefined;
         }
         const payload = {
             ...body,
@@ -66,21 +76,22 @@ class CategoryController {
     async update(req, res) {
         const id = parseId(req);
         const body = categoryUpdateSchema.parse(req.body);
+        const { parent_id: parentIdStr, ...rest } = body;
         let parentId = undefined;
-        if (body.parent_id === null) {
+        if (parentIdStr === null) {
             parentId = null;
         }
-        else if (typeof body.parent_id === "string") {
+        else if (typeof parentIdStr === "string") {
             try {
-                parentId = BigInt(body.parent_id);
+                parentId = BigInt(parentIdStr);
             }
             catch {
                 parentId = undefined;
             }
         }
         const payload = {
-            ...body,
-            parent_id: parentId,
+            ...rest,
+            ...(parentId !== undefined && { parent_id: parentId }),
         };
         try {
             const updated = await category_service_1.categoryService.updateCategory(id, payload);
@@ -89,6 +100,26 @@ class CategoryController {
         catch (err) {
             if (err instanceof client_1.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
                 res.status(409).json({ message: "Category name must be unique." });
+                return;
+            }
+            throw err;
+        }
+    }
+    async delete(req, res) {
+        const id = parseId(req);
+        try {
+            await category_service_1.categoryService.deleteCategory(id);
+            res.status(204).send();
+        }
+        catch (err) {
+            const anyErr = err;
+            if (anyErr?.code === "CATEGORY_HAS_CHILDREN") {
+                res.status(400).json({ message: "Category has children and cannot be deleted." });
+                return;
+            }
+            if (err instanceof client_1.Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+                // Foreign key constraint failed – category in use by polls/configs/etc.
+                res.status(400).json({ message: "Category is in use and cannot be deleted." });
                 return;
             }
             throw err;
