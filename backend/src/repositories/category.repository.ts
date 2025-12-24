@@ -9,7 +9,17 @@ type CategoryDomain = "POLL" | "PROFILE";
 
 export class CategoryRepository {
   async create(data: CategoryCreateDTO): Promise<Category> {
-    return prisma.category.create({ data });
+    const { parent_id, ...rest } = data;
+    
+    const createData: Prisma.CategoryCreateInput = {
+      ...(rest as any),
+    };
+
+    if (parent_id !== undefined) {
+      (createData as any).parent = { connect: { id: parent_id } };
+    }
+
+    return prisma.category.create({ data: createData });
   }
 
   async update(id: CategoryId, data: CategoryUpdateDTO): Promise<Category> {

@@ -83,20 +83,22 @@ export class CategoryController {
   async update(req: Request, res: Response) {
     const id = parseId(req);
     const body = categoryUpdateSchema.parse(req.body);
+    const { parent_id: parentIdStr, ...rest } = body;
+    
     let parentId: CategoryId | null | undefined = undefined;
-    if (body.parent_id === null) {
+    if (parentIdStr === null) {
       parentId = null;
-    } else if (typeof body.parent_id === "string") {
+    } else if (typeof parentIdStr === "string") {
       try {
-        parentId = BigInt(body.parent_id);
+        parentId = BigInt(parentIdStr);
       } catch {
         parentId = undefined;
       }
     }
 
-    const payload = {
-      ...body,
-      parent_id: parentId,
+    const payload: CategoryUpdateDTO = {
+      ...rest,
+      ...(parentId !== undefined && { parent_id: parentId }),
     };
 
     try {
