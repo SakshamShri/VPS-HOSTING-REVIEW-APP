@@ -56,20 +56,15 @@ const items = [
 
 type SidebarProps = {
   collapsed?: boolean;
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
 };
 
-export function Sidebar({ collapsed = false }: SidebarProps) {
+export function Sidebar({ collapsed = false, mobileOpen = false, onCloseMobile }: SidebarProps) {
   const location = useLocation();
 
-  return (
-    <aside
-      className={cn(
-        "fixed inset-y-0 left-0 z-30 border-r bg-background/80 backdrop-blur transition-transform duration-200",
-        sidebarWidth,
-        "hidden lg:flex lg:flex-col",
-        collapsed && "-translate-x-full"
-      )}
-    >
+  const content = (
+    <>
       <div className="flex h-14 items-center border-b px-4">
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-sm font-semibold">
@@ -125,6 +120,42 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
           })}
         </nav>
       </ScrollArea>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-30 border-r bg-background/80 backdrop-blur transition-transform duration-200",
+          sidebarWidth,
+          "hidden lg:flex lg:flex-col",
+          collapsed && "-translate-x-full"
+        )}
+      >
+        {content}
+      </aside>
+
+      {/* Mobile drawer */}
+      <div
+        className={cn(
+          "fixed inset-0 z-40 bg-black/40 backdrop-blur-sm transition-opacity lg:hidden",
+          mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        )}
+        onClick={onCloseMobile}
+      >
+        <aside
+          className={cn(
+            "absolute inset-y-0 left-0 border-r bg-background shadow-lg transition-transform duration-200",
+            sidebarWidth,
+            mobileOpen ? "translate-x-0" : "-translate-x-full"
+          )}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {content}
+        </aside>
+      </div>
+    </>
   );
 }

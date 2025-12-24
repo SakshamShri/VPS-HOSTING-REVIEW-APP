@@ -16,10 +16,15 @@ export function AdminLayout({
   subtitle = "Configure the taxonomy that powers your polls.",
 }: AdminLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-muted">
-      <Sidebar collapsed={sidebarCollapsed} />
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        mobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
+      />
       <div
         className={cn(
           "flex flex-1 flex-col transition-[margin] duration-200",
@@ -31,6 +36,7 @@ export function AdminLayout({
           subtitle={subtitle}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
+          onOpenMobileMenu={() => setMobileSidebarOpen(true)}
         />
         <main className="flex-1 bg-background">
           <div className="container py-8">
