@@ -14,6 +14,7 @@ export function UserLayout({ children }: UserLayoutProps) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
 
   useEffect(() => {
     if (!isResizing) return;
@@ -36,7 +37,20 @@ export function UserLayout({ children }: UserLayoutProps) {
     };
   }, [isResizing]);
 
-  const effectiveWidth = collapsed ? 0 : sidebarWidth;
+  useEffect(() => {
+    function handleResize() {
+      setIsDesktop(window.innerWidth >= 1024);
+    }
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  const effectiveWidth = isDesktop && !collapsed ? sidebarWidth : 0;
 
   return (
     <div className="flex min-h-screen bg-muted">

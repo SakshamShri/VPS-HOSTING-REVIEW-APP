@@ -47,6 +47,11 @@ const sections: NavSection[] = [
         icon: ListChecks,
       },
       {
+        label: "Trending",
+        path: "/user/trending",
+        icon: ListChecks,
+      },
+      {
         label: "My Groups",
         path: "/user/groups",
         icon: Users,

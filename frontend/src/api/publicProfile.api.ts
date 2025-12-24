@@ -17,6 +17,30 @@ export interface PublicProfileDetail extends PublicProfileSummary {
   about?: string | null;
 }
 
+export interface PsiParameters {
+  trustIntegrity: number;
+  performanceDelivery: number;
+  responsiveness: number;
+  leadershipAbility: number;
+}
+
+export interface ProfilePsiSummary {
+  profileId: string;
+  voteCount: number;
+  overallScore: number;
+  parameters: PsiParameters;
+}
+
+export interface TrendingProfileWithPsi {
+  id: string;
+  name: string;
+  categoryName: string | null;
+  photoUrl: string | null;
+  psiScore: number;
+  voteCount: number;
+  parameters: PsiParameters;
+}
+
 export async function fetchPublicProfiles(): Promise<PublicProfileSummary[]> {
   const token = localStorage.getItem("authToken");
 
@@ -132,6 +156,88 @@ export async function followPublicProfile(id: string): Promise<{ followerCount: 
 
   const body = (await res.json()) as { follower_count: number };
   return { followerCount: body.follower_count ?? 0 };
+}
+
+export async function fetchPsiTrendingProfiles(): Promise<TrendingProfileWithPsi[]> {
+  const token = localStorage.getItem("authToken");
+
+  const res = await fetch(`${API_BASE}/user/psi/trending`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    if (res.status === 401) {
+      throw new Error(
+        "AUTH_REQUIRED:" + (data.message || "Please log in to view trending PSI profiles"),
+      );
+    }
+    throw new Error(
+      data.message || `Failed to load PSI trending profiles (${res.status})`,
+    );
+  }
+
+  const data = (await res.json()) as {
+    profiles: Array<{
+      profileId: string;
+      overallScore: number;
+      voteCount: number;
+      parameters: PsiParameters;
+      profile: {
+        id: string;
+        name: string;
+        categoryName: string | null;
+        photoUrl: string | null;
+      } | null;
+    }>;
+  };
+
+  return (data.profiles ?? []).map((item) => {
+    const base = item.profile;
+    return {
+      id: base?.id ?? item.profileId,
+      name: base?.name ?? "Unknown profile",
+      categoryName: base?.categoryName ?? null,
+      photoUrl: resolvePhotoUrl(base?.photoUrl ?? null),
+      psiScore: item.overallScore,
+      voteCount: item.voteCount,
+      parameters: item.parameters,
+    };
+  });
+}
+
+export async function submitPsiVote(
+  profileId: string,
+  ratings: PsiParameters,
+): Promise<ProfilePsiSummary> {
+  const token = localStorage.getItem("authToken");
+
+  const res = await fetch(`${API_BASE}/user/psi/profiles/${profileId}/vote`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(ratings),
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    if (res.status === 401) {
+      throw new Error(
+        "AUTH_REQUIRED:" + (data.message || "Please log in to submit a PSI vote"),
+      );
+    }
+    if (res.status === 404) {
+      throw new Error("NOT_FOUND:" + (data.message || "Profile not found"));
+    }
+    throw new Error(data.message || `Failed to submit PSI vote (${res.status})`);
+  }
+
+  const body = (await res.json()) as ProfilePsiSummary;
+  return body;
 }
 
 export async function unfollowPublicProfile(id: string): Promise<{ followerCount: number }> {

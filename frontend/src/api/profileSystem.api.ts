@@ -3,6 +3,13 @@ import type { ProfileAdminCuratedMode, ProfileCategoryLevel, ProfileStatus } fro
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE_URL ?? "http://localhost:4000";
 
+function resolvePhotoUrl(raw?: string | null): string | null {
+  if (!raw) return null;
+  if (/^https?:\/\//.test(raw)) return raw;
+  if (raw.startsWith("/")) return `${API_BASE}${raw}`;
+  return `${API_BASE}/${raw}`;
+}
+
 function authHeaders(extra?: HeadersInit): HeadersInit {
   const token =
     localStorage.getItem("adminAuthToken") ?? localStorage.getItem("authToken");
@@ -73,6 +80,14 @@ export type AdminProfileSummary = {
   categoryName: string;
   createdAt: string;
   updatedAt: string;
+  photoUrl?: string | null;
+};
+
+export type CreatedProfileAdmin = {
+  id: string;
+  name: string;
+  status: ProfileStatus;
+  categoryId: string;
 };
 
 // ----- Category APIs -----
@@ -184,6 +199,7 @@ export async function fetchProfilesAdmin(categoryId?: string): Promise<AdminProf
       category_name: string;
       created_at: string;
       updated_at: string;
+      photo_url?: string | null;
     }>;
   };
 
@@ -197,6 +213,7 @@ export async function fetchProfilesAdmin(categoryId?: string): Promise<AdminProf
     categoryName: p.category_name,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
+    photoUrl: resolvePhotoUrl(p.photo_url ?? null),
   }));
 }
 
@@ -204,7 +221,7 @@ export async function createProfileAdmin(payload: {
   name: string;
   categoryId: string;
   status?: ProfileStatus;
-}): Promise<void> {
+}): Promise<CreatedProfileAdmin> {
   const body = {
     name: payload.name,
     category_id: payload.categoryId,
@@ -221,6 +238,20 @@ export async function createProfileAdmin(payload: {
     const data = (await res.json().catch(() => ({}))) as { message?: string };
     throw new Error(data.message || `Failed to create profile (${res.status})`);
   }
+
+  const data = (await res.json()) as {
+    id: string;
+    name: string;
+    status: ProfileStatus;
+    category_id: string;
+  };
+
+  return {
+    id: data.id,
+    name: data.name,
+    status: data.status,
+    categoryId: data.category_id,
+  };
 }
 
 export async function updateProfileStatusAdmin(id: string, status: ProfileStatus): Promise<void> {

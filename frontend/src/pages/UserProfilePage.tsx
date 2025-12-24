@@ -132,7 +132,7 @@ export function UserProfilePage() {
                 <Button
                   type="button"
                   variant="outline"
-                  size="xs"
+                  size="sm"
                   onClick={() => setPermanentAddress(address)}
                 >
                   Same as address

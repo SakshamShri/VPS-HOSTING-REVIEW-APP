@@ -52,47 +52,47 @@ enum ProfileAdminCuratedMode {
 }
 
 model Category {
-  id                 BigInt             @id @default(autoincrement())
-  name_en            String
-  name_local         String?            @db.VarChar(255)
-  description        String?            @db.Text
+  id          BigInt  @id @default(autoincrement())
+  name_en     String
+  name_local  String? @db.VarChar(255)
+  description String? @db.Text
 
-  domain             CategoryDomain     @default(POLL)
-  profile_level      ProfileCategoryLevel?
+  domain        CategoryDomain        @default(POLL)
+  profile_level ProfileCategoryLevel?
 
   profile_claimable       YesNo?
   profile_request_allowed YesNo?
   profile_admin_curated   ProfileAdminCuratedMode?
 
-  is_parent          Boolean
-  parent_id          BigInt?
-  parent             Category?          @relation("CategoryChildren", fields: [parent_id], references: [id])
-  children           Category[]         @relation("CategoryChildren")
+  is_parent Boolean
+  parent_id BigInt?
+  parent    Category?  @relation("CategoryChildren", fields: [parent_id], references: [id])
+  children  Category[] @relation("CategoryChildren")
 
-  claimable_default        YesNo
-  request_allowed_default  YesNo
-  admin_curated_default    AdminCuratedLevel
+  claimable_default       YesNo
+  request_allowed_default YesNo
+  admin_curated_default   AdminCuratedLevel
 
-  claimable          YesNo?
-  request_allowed    YesNo?
-  admin_curated      AdminCuratedLevel?
+  claimable       YesNo?
+  request_allowed YesNo?
+  admin_curated   AdminCuratedLevel?
 
   claim_requirements   Json?
   request_requirements Json?
   psi_parameters       Json?
 
-  status             CategoryStatus
-  display_order      Int                @default(0)
-  notes              String?            @db.Text
+  status        CategoryStatus
+  display_order Int            @default(0)
+  notes         String?        @db.Text
 
-  created_at         DateTime           @default(now())
-  updated_at         DateTime           @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-  pollConfigs        PollConfig[]
-  polls              Poll[]
-  userPolls          UserPoll[]
-  profiles           Profile[]
-  profileRequests     ProfileRequest[]  @relation("ProfileRequestCategory")
+  pollConfigs     PollConfig[]
+  polls           Poll[]
+  userPolls       UserPoll[]
+  profiles        Profile[]
+  profileRequests ProfileRequest[] @relation("ProfileRequestCategory")
 
   @@unique([domain, name_en])
 }
@@ -128,9 +128,10 @@ model Profile {
   created_at         DateTime      @default(now())
   updated_at         DateTime      @updatedAt
 
-  claims             ProfileClaim[]
-  approvedRequests   ProfileRequest[] @relation("ApprovedProfile")
-  followers          ProfileFollower[]
+  claims           ProfileClaim[]
+  approvedRequests ProfileRequest[]  @relation("ApprovedProfile")
+  followers        ProfileFollower[]
+  psiVotes         PsiVote[]         @relation("ProfilePsiVotes")
 
   @@unique([category_id, name])
 }
@@ -149,7 +150,7 @@ model ProfileClaim {
   reviewed_by_admin    AdminCredentials?  @relation("ProfileClaimReviewedByAdmin", fields: [reviewed_by_admin_id], references: [id])
   review_reason        String?            @db.Text
 
-  documents            ProfileSubmissionDocument[] @relation("ClaimDocuments")
+  documents ProfileSubmissionDocument[] @relation("ClaimDocuments")
 
   @@unique([profile_id, user_id, status])
 }
@@ -171,11 +172,11 @@ model ProfileRequest {
   reviewed_by_admin    AdminCredentials?    @relation("ProfileRequestReviewedByAdmin", fields: [reviewed_by_admin_id], references: [id])
   review_reason        String?              @db.Text
 
-  documents            ProfileSubmissionDocument[] @relation("RequestDocuments")
+  documents ProfileSubmissionDocument[] @relation("RequestDocuments")
 }
 
 model ProfileSubmissionDocument {
-  id            BigInt   @id @default(autoincrement())
+  id            BigInt          @id @default(autoincrement())
   claim_id      BigInt?
   claim         ProfileClaim?   @relation("ClaimDocuments", fields: [claim_id], references: [id])
   request_id    BigInt?
@@ -185,7 +186,7 @@ model ProfileSubmissionDocument {
   mime_type     String
   size_bytes    Int
   storage_path  String
-  created_at    DateTime @default(now())
+  created_at    DateTime        @default(now())
 }
 
 model ProfileFollower {
@@ -194,6 +195,24 @@ model ProfileFollower {
   profile    Profile  @relation(fields: [profile_id], references: [id])
   user_id    BigInt
   user       User     @relation(fields: [user_id], references: [id])
+  created_at DateTime @default(now())
+
+  @@unique([profile_id, user_id])
+}
+
+model PsiVote {
+  id         BigInt  @id @default(autoincrement())
+  profile_id BigInt
+  profile    Profile @relation("ProfilePsiVotes", fields: [profile_id], references: [id])
+  user_id    BigInt
+  user       User    @relation("UserPsiVotes", fields: [user_id], references: [id])
+
+  weight         Float
+  trust          Float
+  performance    Float
+  responsiveness Float
+  leadership     Float
+
   created_at DateTime @default(now())
 
   @@unique([profile_id, user_id])
@@ -221,13 +240,13 @@ enum PollStatus {
 }
 
 model PollConfig {
-  id          BigInt           @id @default(autoincrement())
-  name        String
-  slug        String           @unique
-  status      PollConfigStatus @default(DRAFT)
+  id     BigInt           @id @default(autoincrement())
+  name   String
+  slug   String           @unique
+  status PollConfigStatus @default(DRAFT)
 
   category_id BigInt
-  category    Category         @relation(fields: [category_id], references: [id])
+  category    Category @relation(fields: [category_id], references: [id])
 
   ui_template PollUiTemplate
 
@@ -235,55 +254,56 @@ model PollConfig {
   rules       Json
   permissions Json
 
-  version     Int              @default(1)
-  created_at  DateTime         @default(now())
-  updated_at  DateTime         @updatedAt
+  version    Int      @default(1)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-  polls       Poll[]
-  votes       Vote[]
+  polls Poll[]
+  votes Vote[]
 }
 
 model Poll {
-  id             BigInt     @id @default(autoincrement())
-  title          String
-  description    String?    @db.Text
+  id          BigInt  @id @default(autoincrement())
+  title       String
+  description String? @db.Text
 
   poll_config_id BigInt
   pollConfig     PollConfig @relation(fields: [poll_config_id], references: [id])
 
-  category_id    BigInt
-  category       Category   @relation(fields: [category_id], references: [id])
+  category_id BigInt
+  category    Category @relation(fields: [category_id], references: [id])
 
-  status         PollStatus @default(DRAFT)
-  start_at       DateTime?
-  end_at         DateTime?
+  status   PollStatus @default(DRAFT)
+  start_at DateTime?
+  end_at   DateTime?
 
-  created_at     DateTime   @default(now())
-  updated_at     DateTime   @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-  invites        Invite[]
-  votes          Vote[]
+  invites Invite[]
+  votes   Vote[]
 }
 
 model User {
-  id          BigInt    @id @default(autoincrement())
-  role        UserRole
-  mobile      String?   @db.VarChar(32)
-  identity_verified Boolean @default(false)
-  is_verified Boolean   @default(false)
-  country     Country?
-  created_at  DateTime  @default(now())
+  id                BigInt   @id @default(autoincrement())
+  role              UserRole
+  mobile            String?  @db.VarChar(32)
+  identity_verified Boolean  @default(false)
+  is_verified       Boolean  @default(false)
+  country           Country?
+  created_at        DateTime @default(now())
 
-  profile     UserProfile?
-  votes       Vote[]
-  deviceLogs  DeviceLog[]
-  userPolls   UserPoll[]       @relation("UserPollCreator")
-  inviteGroups UserInviteGroup[]
-  userPollInvites UserPollInvite[]
-  claimedProfiles Profile[] @relation("ProfileClaimedBy")
-  profileClaims  ProfileClaim[]
-  profileRequests ProfileRequest[]
+  profile          UserProfile?
+  votes            Vote[]
+  deviceLogs       DeviceLog[]
+  userPolls        UserPoll[]        @relation("UserPollCreator")
+  inviteGroups     UserInviteGroup[]
+  userPollInvites  UserPollInvite[]
+  claimedProfiles  Profile[]         @relation("ProfileClaimedBy")
+  profileClaims    ProfileClaim[]
+  profileRequests  ProfileRequest[]
   profileFollowers ProfileFollower[]
+  psiVotes         PsiVote[]         @relation("UserPsiVotes")
 }
 
 model AdminCredentials {
@@ -307,13 +327,13 @@ model OtpSession {
 }
 
 model UserProfile {
-  user_id            BigInt  @id
-  user               User    @relation(fields: [user_id], references: [id])
-  name               String
-  age                Int
-  address            String?
-  current_location   String?
-  permanent_address  String?
+  user_id           BigInt  @id
+  user              User    @relation(fields: [user_id], references: [id])
+  name              String
+  age               Int
+  address           String?
+  current_location  String?
+  permanent_address String?
 }
 
 model Invite {
@@ -323,7 +343,7 @@ model Invite {
   token      String   @unique
   created_at DateTime @default(now())
 
-  votes      Vote[]
+  votes Vote[]
 }
 
 model Vote {
@@ -372,24 +392,24 @@ enum UserPollStatus {
 }
 
 model UserPoll {
-  id             BigInt        @id @default(autoincrement())
+  id             BigInt         @id @default(autoincrement())
   creator_id     BigInt
-  creator        User          @relation("UserPollCreator", fields: [creator_id], references: [id])
+  creator        User           @relation("UserPollCreator", fields: [creator_id], references: [id])
   category_id    BigInt?
-  category       Category?     @relation(fields: [category_id], references: [id])
+  category       Category?      @relation(fields: [category_id], references: [id])
   title          String
-  description    String?       @db.Text
-  source_info    String?       @db.Text
+  description    String?        @db.Text
+  source_info    String?        @db.Text
   type           UserPollType
   status         UserPollStatus
-  is_invite_only Boolean       @default(true)
+  is_invite_only Boolean        @default(true)
   start_at       DateTime?
   end_at         DateTime?
-  created_at     DateTime      @default(now())
-  updated_at     DateTime      @updatedAt
+  created_at     DateTime       @default(now())
+  updated_at     DateTime       @updatedAt
 
-  options        UserPollOption[]
-  invites        UserPollInvite[]
+  options UserPollOption[]
+  invites UserPollInvite[]
 }
 
 model UserPollOption {
@@ -401,32 +421,32 @@ model UserPollOption {
 }
 
 model UserInviteGroup {
-  id         BigInt                 @id @default(autoincrement())
+  id         BigInt   @id @default(autoincrement())
   owner_id   BigInt
-  owner      User                   @relation(fields: [owner_id], references: [id])
+  owner      User     @relation(fields: [owner_id], references: [id])
   name       String
-  created_at DateTime               @default(now())
+  created_at DateTime @default(now())
 
-  members    UserInviteGroupMember[]
+  members UserInviteGroupMember[]
 }
 
 model UserInviteGroupMember {
-  id        BigInt         @id @default(autoincrement())
-  group_id  BigInt
-  group     UserInviteGroup @relation(fields: [group_id], references: [id])
-  mobile    String          @db.VarChar(32)
+  id       BigInt          @id @default(autoincrement())
+  group_id BigInt
+  group    UserInviteGroup @relation(fields: [group_id], references: [id])
+  mobile   String          @db.VarChar(32)
 }
 
 model UserPollInvite {
-  id         BigInt   @id @default(autoincrement())
+  id         BigInt               @id @default(autoincrement())
   poll_id    BigInt
-  poll       UserPoll @relation(fields: [poll_id], references: [id])
-  mobile     String   @db.VarChar(32)
-  token      String   @unique
+  poll       UserPoll             @relation(fields: [poll_id], references: [id])
+  mobile     String               @db.VarChar(32)
+  token      String               @unique
   user_id    BigInt?
-  user       User?    @relation(fields: [user_id], references: [id])
+  user       User?                @relation(fields: [user_id], references: [id])
   status     UserPollInviteStatus @default(PENDING)
-  created_at DateTime @default(now())
+  created_at DateTime             @default(now())
 }
 
 enum UserPollInviteStatus {

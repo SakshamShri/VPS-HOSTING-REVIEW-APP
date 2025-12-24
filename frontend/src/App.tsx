@@ -13,6 +13,8 @@ import { UserFeedPage } from "./pages/UserFeedPage";
 import { UserGroupsPage } from "./pages/UserGroupsPage";
 import { UserPublicProfilesPage } from "./pages/UserPublicProfilesPage";
 import { UserPublicProfileDetailPage } from "./pages/UserPublicProfileDetailPage";
+import { UserTrendingPage } from "./pages/UserTrendingPage";
+import { UserTrendingVotePage } from "./pages/UserTrendingVotePage";
 import { ProfileAdminPage } from "./pages/ProfileAdminPage";
 import { PollVotePage } from "./pages/PollVotePage";
 import { UserPollCreatePage } from "./pages/UserPollCreatePage";
@@ -150,6 +152,8 @@ function App() {
       <Route path="/user/home" element={<UserHomePage />} />
       <Route path="/user/groups" element={<UserGroupsPage />} />
       <Route path="/user/feed" element={<UserFeedPage />} />
+      <Route path="/user/trending" element={<UserTrendingPage />} />
+      <Route path="/user/trending/:id/vote" element={<UserTrendingVotePage />} />
       <Route path="/profiles" element={<UserPublicProfilesPage />} />
       <Route path="/profiles/:id" element={<UserPublicProfileDetailPage />} />
       <Route path="/polls/:id" element={<PollVotePage />} />

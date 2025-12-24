@@ -10,6 +10,7 @@ import { authRouter } from "./routes/auth.routes";
 import { userRouter } from "./routes/user.routes";
 import { inviteRouter } from "./routes/invite.routes";
 import { profileSystemRouter } from "./routes/profileSystem.routes";
+import { psiRouter } from "./routes/psi.routes";
 
 export function createApp() {
   const app = express();
@@ -18,7 +19,7 @@ export function createApp() {
 
   app.use(
     cors({
-      origin: FRONTEND_ORIGIN,
+      origin: [FRONTEND_ORIGIN, "http://localhost:5173", "http://localhost:5174"],
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
       credentials: true,
@@ -28,7 +29,7 @@ export function createApp() {
 
   // Explicitly handle CORS preflight for all routes
   app.options("*", cors({
-    origin: FRONTEND_ORIGIN,
+    origin: [FRONTEND_ORIGIN, "http://localhost:5173", "http://localhost:5174"],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
     credentials: true,
@@ -46,6 +47,7 @@ export function createApp() {
   app.use(userRouter);
   app.use(inviteRouter);
   app.use(profileSystemRouter);
+  app.use(psiRouter);
 
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     // Minimal error handler for now
