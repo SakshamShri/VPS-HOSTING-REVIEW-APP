@@ -13,9 +13,11 @@ import { profileSystemRouter } from "./routes/profileSystem.routes";
 export function createApp() {
   const app = express();
 
+  const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+
   app.use(
     cors({
-      origin: "http://localhost:5173",
+      origin: FRONTEND_ORIGIN,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
       credentials: true,
@@ -25,7 +27,7 @@ export function createApp() {
 
   // Explicitly handle CORS preflight for all routes
   app.options("*", cors({
-    origin: "http://localhost:5173",
+    origin: FRONTEND_ORIGIN,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
     credentials: true,
