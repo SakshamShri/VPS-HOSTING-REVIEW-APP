@@ -1,5 +1,6 @@
 import { prisma } from "../utils/db";
 import { validateSubmittedDataOrThrow } from "../utils/profileRequirements";
+import path from "path";
 
 type CategoryStatus = "ACTIVE" | "DISABLED";
 type ProfileAdminCuratedMode = "FULL" | "PARTIAL" | "NONE";
@@ -306,12 +307,17 @@ export class ProfileSystemService {
     return created;
   }
 
-  async updateProfileAdmin(id: string, patch: Partial<{ status: ProfileStatus }>) {
+  async updateProfileAdmin(
+    id: string,
+    patch: Partial<{ status: ProfileStatus; about: string | null; photo_url: string | null }>
+  ) {
     const profileId = parseBigIntId(id);
     const updated = await prisma.profile.update({
       where: { id: profileId },
       data: {
         status: patch.status ?? undefined,
+        about: patch.about !== undefined ? patch.about : undefined,
+        photo_url: patch.photo_url !== undefined ? patch.photo_url : undefined,
       },
     });
     return updated;
@@ -630,6 +636,8 @@ export class ProfileSystemService {
           }
         : null,
       created_at: p.created_at,
+      photo_url: p.photo_url ?? null,
+      about: p.about ?? null,
     }));
   }
 
@@ -668,6 +676,8 @@ export class ProfileSystemService {
       created_at: profile.created_at,
       status: profile.status,
       follower_count: followerCount,
+      photo_url: profile.photo_url ?? null,
+      about: profile.about ?? null,
     };
   }
 

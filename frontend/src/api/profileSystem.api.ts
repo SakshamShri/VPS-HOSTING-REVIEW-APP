@@ -238,6 +238,45 @@ export async function updateProfileStatusAdmin(id: string, status: ProfileStatus
   }
 }
 
+export async function updateProfileAboutAdmin(id: string, about: string | null): Promise<void> {
+  const body = { about };
+
+  const res = await fetch(`${API_BASE}/profile/profiles/${id}`, {
+    method: "PUT",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(data.message || `Failed to update profile (${res.status})`);
+  }
+}
+
+export async function uploadProfilePhotoAdmin(id: string, file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append("photo", file);
+
+  const token =
+    localStorage.getItem("adminAuthToken") ?? localStorage.getItem("authToken");
+
+  const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+
+  const res = await fetch(`${API_BASE}/profile/profiles/${id}/photo`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(data.message || `Failed to upload profile photo (${res.status})`);
+  }
+
+  const body = (await res.json()) as { photo_url: string };
+  return body.photo_url;
+}
+
 // ----- Ticket Center (claims and requests) -----
 
 export async function fetchClaimTicketsAdmin(): Promise<ProfileClaimTicket[]> {

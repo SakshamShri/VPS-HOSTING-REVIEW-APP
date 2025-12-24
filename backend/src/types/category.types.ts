@@ -7,7 +7,7 @@ export interface CategoryCreateDTO {
   name_local?: string | null;
   description?: string | null;
   is_parent: boolean;
-  parent_id?: CategoryId | null;
+  parent_id?: CategoryId;
   claimable_default: YesNo;
   request_allowed_default: YesNo;
   admin_curated_default: AdminCuratedLevel;

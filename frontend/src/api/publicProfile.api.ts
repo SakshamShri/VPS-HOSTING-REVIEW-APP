@@ -7,12 +7,14 @@ export interface PublicProfileSummary {
   isClaimed: boolean;
   isVerified: boolean;
   categoryName: string | null;
+  photoUrl?: string | null;
 }
 
 export interface PublicProfileDetail extends PublicProfileSummary {
   status: "ACTIVE" | "DISABLED";
   followerCount: number;
   isFollowing: boolean;
+  about?: string | null;
 }
 
 export async function fetchPublicProfiles(): Promise<PublicProfileSummary[]> {
@@ -39,6 +41,8 @@ export async function fetchPublicProfiles(): Promise<PublicProfileSummary[]> {
       is_claimed: boolean;
       claimed_by_user_id: string | null;
       category: { id: string; name: string } | null;
+      photo_url?: string | null;
+      about?: string | null;
     }>;
   };
 
@@ -48,6 +52,8 @@ export async function fetchPublicProfiles(): Promise<PublicProfileSummary[]> {
     isClaimed: p.is_claimed,
     isVerified: p.is_claimed, // in this phase, claimed == verified via manual admin approval
     categoryName: p.category?.name ?? null,
+    photoUrl: p.photo_url ?? null,
+    about: p.about ?? null,
   }));
 }
 
@@ -82,6 +88,8 @@ export async function fetchPublicProfileDetail(id: string): Promise<PublicProfil
       status: "ACTIVE" | "DISABLED";
       follower_count: number;
       is_following: boolean;
+      photo_url?: string | null;
+      about?: string | null;
     };
   };
 
@@ -95,6 +103,8 @@ export async function fetchPublicProfileDetail(id: string): Promise<PublicProfil
     status: p.status,
     followerCount: p.follower_count ?? 0,
     isFollowing: p.is_following ?? false,
+    photoUrl: p.photo_url ?? null,
+    about: p.about ?? null,
   };
 }
 

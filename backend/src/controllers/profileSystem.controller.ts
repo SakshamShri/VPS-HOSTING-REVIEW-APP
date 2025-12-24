@@ -37,6 +37,8 @@ const createProfileSchema = z.object({
 
 const updateProfileSchema = z.object({
   status: z.enum(["ACTIVE", "DISABLED"]).optional(),
+  about: z.string().max(5000).optional().nullable(),
+  photo_url: z.string().max(2048).optional().nullable(),
 });
 
 const approveRejectSchema = z.object({
@@ -105,6 +107,37 @@ export class ProfileSystemController {
       }
       if ((err as any)?.code === "P2002") {
         res.status(409).json({ message: "Category name must be unique in this domain" });
+        return;
+      }
+      throw err;
+    }
+  }
+
+  async adminUploadProfilePhoto(req: AuthenticatedRequest, res: Response) {
+    try {
+      const id = parseId(req);
+      const file = (req as any).file as { path: string } | undefined;
+      if (!file) {
+        res.status(400).json({ message: "No file uploaded" });
+        return;
+      }
+
+      // Store as a relative URL under /uploads so frontend can render directly
+      const relativePath = `/uploads/profile-photos/${file.path.split("profile-photos").pop()}`;
+
+      const updated = await profileSystemService.updateProfileAdmin(id, {
+        photo_url: relativePath,
+      });
+
+      res.json({ photo_url: updated.photo_url });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid payload", issues: err.errors });
+        return;
+      }
+      const code = (err as any)?.code as string | undefined;
+      if (code === "PROFILE_NOT_FOUND") {
+        res.status(404).json({ message: "Profile not found" });
         return;
       }
       throw err;
@@ -193,6 +226,8 @@ export class ProfileSystemController {
       const body = updateProfileSchema.parse(req.body);
       const updated = await profileSystemService.updateProfileAdmin(id, {
         status: body.status,
+        about: body.about ?? undefined,
+        photo_url: body.photo_url ?? undefined,
       });
       res.json(updated);
     } catch (err) {

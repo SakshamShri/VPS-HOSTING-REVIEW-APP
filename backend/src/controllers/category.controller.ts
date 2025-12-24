@@ -52,13 +52,15 @@ export class CategoryController {
       res.status(400).json({ message: "Child category must have a parent_id." });
       return;
     }
-    let parentId: CategoryId | null = null;
+    let parentId: CategoryId | undefined;
     if (body.parent_id != null) {
       try {
         parentId = BigInt(body.parent_id);
       } catch {
-        parentId = null;
+        parentId = undefined;
       }
+    } else {
+      parentId = undefined;
     }
 
     const payload = {

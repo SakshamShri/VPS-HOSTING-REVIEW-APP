@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import path from "path";
 
 import { categoryRouter } from "./routes/category.routes";
 import { pollConfigRouter } from "./routes/pollConfig.routes";
@@ -35,6 +36,7 @@ export function createApp() {
   }));
 
   app.use(express.json());
+  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
   app.use(healthRouter);
   app.use(categoryRouter);

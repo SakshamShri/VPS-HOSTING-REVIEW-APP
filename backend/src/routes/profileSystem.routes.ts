@@ -3,6 +3,7 @@ import { Router } from "express";
 import { requireAdmin, requireUser } from "../middleware/auth.middleware";
 import { profileSystemController } from "../controllers/profileSystem.controller";
 import { profileSubmissionUpload } from "../utils/profileUpload";
+import { profilePhotoUpload } from "../utils/profilePhotoUpload";
 
 export const profileSystemRouter = Router();
 
@@ -24,6 +25,12 @@ profileSystemRouter.post("/profile/profiles", requireAdmin, (req, res) =>
 );
 profileSystemRouter.put("/profile/profiles/:id", requireAdmin, (req, res) =>
   profileSystemController.adminUpdateProfile(req, res)
+);
+profileSystemRouter.post(
+  "/profile/profiles/:id/photo",
+  requireAdmin,
+  profilePhotoUpload.single("photo"),
+  (req, res) => profileSystemController.adminUploadProfilePhoto(req, res)
 );
 
 profileSystemRouter.get("/profile/review/claims", requireAdmin, (req, res) =>
