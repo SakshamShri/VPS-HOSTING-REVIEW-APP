@@ -49,6 +49,17 @@ export class CategoryService {
     return categoryRepository.update(id, payload);
   }
 
+  async deleteCategory(id: CategoryId): Promise<void> {
+    const children = await categoryRepository.findChildren(id);
+    if (children.length > 0) {
+      const err = new Error("CATEGORY_HAS_CHILDREN");
+      (err as any).code = "CATEGORY_HAS_CHILDREN";
+      throw err;
+    }
+
+    await categoryRepository.delete(id);
+  }
+
   async getCategoryTree(domain: CategoryDomain = "POLL"): Promise<CategoryTreeNodeDTO[]> {
     const flat = await categoryRepository.findTree(domain);
     return buildTree(flat);

@@ -79,6 +79,7 @@ model Category {
 
   claim_requirements   Json?
   request_requirements Json?
+  psi_parameters       Json?
 
   status             CategoryStatus
   display_order      Int                @default(0)
@@ -122,6 +123,8 @@ model Profile {
   is_claimed         Boolean       @default(false)
   claimed_by_user_id BigInt?
   claimed_by_user    User?         @relation("ProfileClaimedBy", fields: [claimed_by_user_id], references: [id])
+  photo_url          String?       @db.VarChar(1024)
+  about              String?       @db.Text
   created_at         DateTime      @default(now())
   updated_at         DateTime      @updatedAt
 

@@ -17,6 +17,9 @@ export interface CategoryCreateDTO {
   status: CategoryStatus;
   display_order?: number;
   notes?: string | null;
+  claim_requirements?: unknown | null;
+  request_requirements?: unknown | null;
+  psi_parameters?: unknown | null;
 }
 
 export type CategoryUpdateDTO = Partial<CategoryCreateDTO>;

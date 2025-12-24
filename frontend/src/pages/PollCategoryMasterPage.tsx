@@ -14,7 +14,8 @@ export function PollCategoryMasterPage() {
 
   useEffect(() => {
     let isMounted = true;
-    (async () => {
+
+    const load = async () => {
       try {
         setLoading(true);
         const data = await fetchCategoryTree();
@@ -31,7 +32,9 @@ export function PollCategoryMasterPage() {
           setLoading(false);
         }
       }
-    })();
+    };
+
+    void load();
 
     return () => {
       isMounted = false;
@@ -65,7 +68,21 @@ export function PollCategoryMasterPage() {
         </p>
       )}
 
-      <CategoryTable data={categories} />
+      <CategoryTable
+        data={categories}
+        onChange={async () => {
+          try {
+            setLoading(true);
+            const data = await fetchCategoryTree();
+            setCategories(data);
+          } catch (err) {
+            console.error(err);
+            setError("Unable to load categories.");
+          } finally {
+            setLoading(false);
+          }
+        }}
+      />
     </div>
   );
 }

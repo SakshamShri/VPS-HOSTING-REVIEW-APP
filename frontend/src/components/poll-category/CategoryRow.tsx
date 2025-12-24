@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, MoreHorizontal } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
 import type { CategoryNode, CategoryStatus } from "../../types/category";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { deleteCategory } from "../../api/category.api";
 
 type CategoryRowProps = {
   node: CategoryNode;
   level?: number;
+  onChange?: () => void;
 };
 
 function StatusBadge({ status }: { status: CategoryStatus }) {
@@ -28,24 +30,51 @@ function StatusBadge({ status }: { status: CategoryStatus }) {
   );
 }
 
-export function CategoryRow({ node, level = 0 }: CategoryRowProps) {
+export function CategoryRow({ node, level = 0, onChange }: CategoryRowProps) {
   const navigate = useNavigate();
   const isParent = node.type === "parent";
   const hasChildren = !!node.children?.length;
   const [expanded, setExpanded] = useState<boolean>(false);
+
+  const handleRowClick = () => {
+    navigate(`/admin/categories/${node.id}/edit`);
+  };
+
+  const handleDelete = async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    const name = node.name;
+    const confirmed = window.confirm(
+      `Delete category "${name}"? This cannot be undone and is only allowed if the category has no children or linked polls.`
+    );
+    if (!confirmed) return;
+
+    try {
+      await deleteCategory(String(node.id));
+      onChange?.();
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      alert((err as Error).message || "Failed to delete category.");
+    }
+  };
 
   const indentClass =
     level === 0 ? "" : level === 1 ? "pl-6" : level === 2 ? "pl-10" : "pl-12";
 
   return (
     <>
-      <tr className="group hover:bg-muted/40">
+      <tr
+        className="group hover:bg-muted/40 cursor-pointer"
+        onClick={handleRowClick}
+      >
         <td className="px-4 py-3 align-middle">
           <div className={cn("flex items-center gap-2", indentClass)}>
             {hasChildren ? (
               <button
                 type="button"
-                onClick={() => setExpanded((prev) => !prev)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setExpanded((prev) => !prev);
+                }}
                 className="flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                 aria-label={expanded ? "Collapse child categories" : "Expand child categories"}
               >
@@ -78,16 +107,31 @@ export function CategoryRow({ node, level = 0 }: CategoryRowProps) {
           <StatusBadge status={node.status} />
         </td>
         <td className="px-4 py-3 align-middle text-right">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            aria-label={`Open actions for ${node.name}`}
-            onClick={() => navigate(`/admin/categories/${node.id}/edit`)}
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
+          <div className="inline-flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              aria-label={`Edit ${node.name}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate(`/admin/categories/${node.id}/edit`);
+              }}
+            >
+              ✎
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-destructive hover:text-destructive"
+              aria-label={`Delete ${node.name}`}
+              onClick={handleDelete}
+            >
+              🗑
+            </Button>
+          </div>
         </td>
       </tr>
       {expanded &&

@@ -13,7 +13,25 @@ export class CategoryRepository {
   }
 
   async update(id: CategoryId, data: CategoryUpdateDTO): Promise<Category> {
-    return prisma.category.update({ where: { id }, data });
+    const { parent_id, ...rest } = data;
+
+    const updateData: Prisma.CategoryUpdateInput = {
+      ...(rest as any),
+    };
+
+    if (parent_id !== undefined) {
+      if (parent_id === null) {
+        (updateData as any).parent = { disconnect: true };
+      } else {
+        (updateData as any).parent = { connect: { id: parent_id } };
+      }
+    }
+
+    return prisma.category.update({ where: { id }, data: updateData });
+  }
+
+  async delete(id: CategoryId): Promise<void> {
+    await prisma.category.delete({ where: { id } });
   }
 
   async findById(id: CategoryId): Promise<Category | null> {

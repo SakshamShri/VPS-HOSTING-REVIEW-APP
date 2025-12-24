@@ -3,9 +3,10 @@ import { CategoryRow } from "./CategoryRow";
 
 type CategoryTableProps = {
   data: CategoryNode[];
+  onChange?: () => void;
 };
 
-export function CategoryTable({ data }: CategoryTableProps) {
+export function CategoryTable({ data, onChange }: CategoryTableProps) {
   return (
     <div className="overflow-hidden rounded-md border bg-card">
       <table className="min-w-full border-collapse text-sm">
@@ -19,7 +20,7 @@ export function CategoryTable({ data }: CategoryTableProps) {
         </thead>
         <tbody className="divide-y divide-border">
           {data.map((node) => (
-            <CategoryRow key={node.id} node={node} />
+            <CategoryRow key={node.id} node={node} onChange={onChange} />
           ))}
         </tbody>
       </table>

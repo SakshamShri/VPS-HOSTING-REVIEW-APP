@@ -26,6 +26,9 @@ const categoryCreateSchema = z.object({
   status: statusEnum,
   display_order: z.number().int().optional(),
   notes: z.string().optional().nullable(),
+  claim_requirements: z.unknown().optional().nullable(),
+  request_requirements: z.unknown().optional().nullable(),
+  psi_parameters: z.unknown().optional().nullable(),
 });
 
 const categoryUpdateSchema = categoryCreateSchema.partial();
@@ -45,6 +48,10 @@ function parseId(req: Request): CategoryId {
 export class CategoryController {
   async create(req: Request, res: Response) {
     const body = categoryCreateSchema.parse(req.body);
+    if (body.is_parent === false && (!body.parent_id || body.parent_id.trim() === "")) {
+      res.status(400).json({ message: "Child category must have a parent_id." });
+      return;
+    }
     let parentId: CategoryId | null = null;
     if (body.parent_id != null) {
       try {
@@ -96,6 +103,26 @@ export class CategoryController {
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
         res.status(409).json({ message: "Category name must be unique." });
+        return;
+      }
+      throw err;
+    }
+  }
+
+  async delete(req: Request, res: Response) {
+    const id = parseId(req);
+    try {
+      await categoryService.deleteCategory(id);
+      res.status(204).send();
+    } catch (err) {
+      const anyErr = err as any;
+      if (anyErr?.code === "CATEGORY_HAS_CHILDREN") {
+        res.status(400).json({ message: "Category has children and cannot be deleted." });
+        return;
+      }
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+        // Foreign key constraint failed – category in use by polls/configs/etc.
+        res.status(400).json({ message: "Category is in use and cannot be deleted." });
         return;
       }
       throw err;

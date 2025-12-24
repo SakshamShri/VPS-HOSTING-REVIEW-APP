@@ -115,6 +115,28 @@ export async function createCategory(
     status: mapStatusToApi(values.status),
     display_order: 0,
     notes: null,
+    claim_requirements:
+      values.claimRequirements && values.claimRequirements.length
+        ? {
+            fields: values.claimRequirements.map((f) => ({
+              key: f.key,
+              label: f.label,
+              type: f.type,
+              required: f.required,
+            })),
+          }
+        : null,
+    psi_parameters:
+      values.psiParameters && values.psiParameters.length
+        ? {
+            parameters: values.psiParameters.map((p) => ({
+              id: p.id,
+              label: p.label,
+              description: p.description,
+              weight: p.weight,
+            })),
+          }
+        : null,
   };
 
   const res = await fetch(`${API_BASE}/categories`, {
@@ -152,6 +174,28 @@ export async function updateCategory(
     status: mapStatusToApi(values.status),
     display_order: 0,
     notes: null,
+    claim_requirements:
+      values.claimRequirements && values.claimRequirements.length
+        ? {
+            fields: values.claimRequirements.map((f) => ({
+              key: f.key,
+              label: f.label,
+              type: f.type,
+              required: f.required,
+            })),
+          }
+        : null,
+    psi_parameters:
+      values.psiParameters && values.psiParameters.length
+        ? {
+            parameters: values.psiParameters.map((p) => ({
+              id: p.id,
+              label: p.label,
+              description: p.description,
+              weight: p.weight,
+            })),
+          }
+        : null,
   };
 
   const res = await fetch(`${API_BASE}/categories/${id}`, {
@@ -162,5 +206,17 @@ export async function updateCategory(
 
   if (!res.ok) {
     throw new Error(`Failed to update category: ${res.status}`);
+  }
+}
+
+export async function deleteCategory(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/categories/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Failed to delete category: ${res.status}`);
   }
 }

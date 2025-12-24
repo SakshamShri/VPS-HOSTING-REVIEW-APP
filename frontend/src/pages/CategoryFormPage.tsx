@@ -24,6 +24,8 @@ import type {
   InheritedStates,
   OverrideFlags,
   RegionScope,
+  PsiParameter,
+  ClaimRequirementField,
 } from "../types/category.form.types";
 import { editChildCategoryMock } from "../mocks/categoryEdit.mock";
 import { ImpactPreviewModal } from "../components/ImpactPreviewModal";
@@ -1346,6 +1348,7 @@ export function CategoryFormPage({ mode }: CategoryFormPageProps) {
       claimable: "YES",
       requestAllowed: "YES",
       adminCurated: "PARTIAL",
+      psiParameters: [],
     };
 
   const [values, setValues] = useState<CategoryFormValues>(initialValues);
@@ -1371,6 +1374,7 @@ export function CategoryFormPage({ mode }: CategoryFormPageProps) {
   const [impactOpen, setImpactOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<number>(1);
   const [parentOptions, setParentOptions] = useState<CategoryNode[]>([]);
 
   const update = <K extends keyof CategoryFormValues>(key: K, value: CategoryFormValues[K]) => {
@@ -1432,6 +1436,68 @@ export function CategoryFormPage({ mode }: CategoryFormPageProps) {
     });
   };
 
+  const psiParameters: PsiParameter[] = values.psiParameters ?? [];
+
+  const claimRequirements: ClaimRequirementField[] = values.claimRequirements ?? [];
+
+  const addPsiParameter = () => {
+    const id = `psi_${Date.now()}_${psiParameters.length}`;
+    const next: PsiParameter[] = [
+      ...psiParameters,
+      {
+        id,
+        label: "",
+        description: "",
+        weight: 1,
+      },
+    ];
+    update("psiParameters", next as any);
+  };
+
+  const updatePsiParameter = (id: string, patch: Partial<PsiParameter>) => {
+    const next = psiParameters.map((param) =>
+      param.id === id ? { ...param, ...patch } : param
+    );
+    update("psiParameters", next as any);
+  };
+
+  const removePsiParameter = (id: string) => {
+    const next = psiParameters.filter((param) => param.id !== id);
+    update("psiParameters", next as any);
+  };
+
+  const addClaimRequirement = (type: "url" | "document") => {
+    const id = `req_${Date.now()}_${claimRequirements.length}`;
+    const index = claimRequirements.length + 1;
+    const keyBase = type === "url" ? "url" : "document";
+    const next: ClaimRequirementField[] = [
+      ...claimRequirements,
+      {
+        id,
+        key: `${keyBase}_${index}`,
+        label: type === "url" ? "Social / website URL" : "Document",
+        type,
+        required: true,
+      },
+    ];
+    update("claimRequirements", next as any);
+  };
+
+  const updateClaimRequirement = (
+    id: string,
+    patch: Partial<ClaimRequirementField>,
+  ) => {
+    const next = claimRequirements.map((field) =>
+      field.id === id ? { ...field, ...patch } : field,
+    );
+    update("claimRequirements", next as any);
+  };
+
+  const removeClaimRequirement = (id: string) => {
+    const next = claimRequirements.filter((field) => field.id !== id);
+    update("claimRequirements", next as any);
+  };
+
   useEffect(() => {
     if (!isChild) return;
 
@@ -1454,12 +1520,17 @@ export function CategoryFormPage({ mode }: CategoryFormPageProps) {
   }, [isChild]);
 
   const pageTitle = mode === "create" ? "Create Category" : "Edit Category";
+  const totalSteps = 4;
 
   return (
     <form
       className="space-y-6"
       onSubmit={(event) => {
         event.preventDefault();
+        if (values.kind === "child" && !values.parentCategoryId) {
+          setError("Please select a parent category for the child category.");
+          return;
+        }
         (async () => {
           try {
             setSaving(true);
@@ -1490,567 +1561,208 @@ export function CategoryFormPage({ mode }: CategoryFormPageProps) {
         </p>
       </div>
 
-      {/* Basic Information */}
-      <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <h3 className="mb-4 text-base font-semibold tracking-tight text-foreground">
-          Basic Information
-        </h3>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="category-name">Category Name</Label>
-            <Input
-              id="category-name"
-              value={values.name}
-              onChange={(e) => update("name", e.target.value)}
-              placeholder="Enter category name"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="category-description">Description</Label>
-            <Textarea
-              id="category-description"
-              value={values.description}
-              onChange={(e) => update("description", e.target.value)}
-              placeholder="Optional description for internal use"
-              rows={3}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Category Type & Parent selection */}
-      <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
-        <CategoryTypeSelector
-          value={values.kind}
-          onChange={(kind) => update("kind", kind)}
-        />
-        {isChild && (
-          <ParentCategorySelect
-            value={values.parentCategoryId}
-            options={parentOptions}
-            onChange={(id) => update("parentCategoryId", id)}
-          />
-        )}
-      </div>
-
-      {/* Region visibility */}
-      <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h3 className="text-base font-semibold tracking-tight text-foreground">
-              Region &amp; Visibility
+      {step === 1 && (
+        <>
+          <div className="rounded-lg border bg-card p-6 shadow-sm">
+            <h3 className="mb-4 text-base font-semibold tracking-tight text-foreground">
+              Basic Information
             </h3>
-            <p className="text-xs text-muted-foreground">
-              Choose where polls under this category can appear.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(["ALL", "COUNTRY", "STATE", "CITY"] as RegionScope[]).map((scope) => {
-              const active = values.regionScope === scope;
-              const labels: Record<RegionScope, string> = {
-                ALL: "All regions",
-                COUNTRY: "Country",
-                STATE: "State",
-                CITY: "City",
-              };
-              return (
-                <button
-                  key={scope}
-                  type="button"
-                  onClick={() => setRegionScope(scope)}
-                  className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
-                    active
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-transparent bg-muted text-muted-foreground hover:bg-muted/80"
-                  }`}
-                >
-                  {labels[scope]}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {values.regionScope !== "ALL" && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="region-country">Country</Label>
-              <Select value={resolvedCountry} onValueChange={handleCountryChange}>
-                <SelectTrigger id="region-country">
-                  <SelectValue placeholder="Select a country" />
-                </SelectTrigger>
-                <SelectContent>
-                  {countryOptions.map((country) => (
-                    <SelectItem key={country.isoCode} value={country.isoCode}>
-                      {country.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {values.regionScope !== "COUNTRY" && (
+            <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="region-state">State / Province</Label>
-                <Select
-                  value={values.state || ALL_VALUE}
-                  onValueChange={handleStateChange}
-                  disabled={!statesForCountry.length}
-                >
-                  <SelectTrigger id="region-state">
-                    <SelectValue
-                      placeholder={
-                        statesForCountry.length
-                          ? "Select a state / province"
-                          : "Select a country first"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL_VALUE}>
-                      All states in {
-                        countryOptions.find((c) => c.isoCode === resolvedCountry)?.name ??
-                        "this country"
-                      }
-                    </SelectItem>
-                    {statesForCountry.map((state) => (
-                      <SelectItem key={state.value} value={state.value}>
-                        {state.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="category-name">Category Name</Label>
+                <Input
+                  id="category-name"
+                  value={values.name}
+                  onChange={(e) => update("name", e.target.value)}
+                  placeholder="Enter category name"
+                />
               </div>
-            )}
-
-            {values.regionScope === "CITY" && (
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="region-city">City</Label>
-                <Select
-                  value={values.city || ALL_VALUE}
-                  onValueChange={(city) => {
-                    if (city === ALL_VALUE) {
-                      update("city", "");
-                    } else {
-                      update("city", city);
-                    }
-                  }}
-                  disabled={!citiesForState.length}
-                >
-                  <SelectTrigger id="region-city">
-                    <SelectValue
-                      placeholder={
-                        citiesForState.length ? "Select a city" : "Select a state first"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL_VALUE}>
-                      All cities in {
-                        statesForCountry.find((s) => s.value === values.state)?.label ||
-                          countryOptions.find((c) => c.isoCode === resolvedCountry)?.name ||
-                          "this region"
-                      }
-                    </SelectItem>
-                    {citiesForState.map((city) => (
-                      <SelectItem key={city.value} value={city.value}>
-                        {city.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-2">
+                <Label htmlFor="category-description">Description</Label>
+                <Textarea
+                  id="category-description"
+                  value={values.description}
+                  onChange={(e) => update("description", e.target.value)}
+                  placeholder="Optional description for internal use"
+                  rows={3}
+                />
               </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Parent controls */}
-      {isParent && (
-        <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
-          <h3 className="text-base font-semibold tracking-tight text-foreground">
-            Parent Defaults (Applied to children unless overridden)
-          </h3>
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-0.5">
-              <Label htmlFor="allow-poll-creation" className="text-sm font-medium">
-                Allow Poll Creation
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                When enabled, polls can be created under this category.
-              </p>
             </div>
-            <Switch
-              id="allow-poll-creation"
-              checked={values.allowPollCreation}
-              onCheckedChange={(checked) => update("allowPollCreation", checked)}
+          </div>
+
+          <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
+            <CategoryTypeSelector
+              value={values.kind}
+              onChange={(kind) => update("kind", kind)}
             />
+            {isChild && (
+              <ParentCategorySelect
+                value={values.parentCategoryId}
+                options={parentOptions}
+                onChange={(id) => update("parentCategoryId", id)}
+              />
+            )}
           </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Status</Label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => update("status", "active")}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  values.status === "active"
-                    ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                    : "bg-muted text-muted-foreground border border-transparent"
-                }`}
-              >
-                Active
-              </button>
-              <button
-                type="button"
-                onClick={() => update("status", "disabled")}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  values.status === "disabled"
-                    ? "bg-slate-100 text-slate-700 border border-slate-200"
-                    : "bg-muted text-muted-foreground border border-transparent"
-                }`}
-              >
-                Disabled
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-2 space-y-3 border-t pt-4">
-            <p className="text-xs text-muted-foreground">
-              Policy controls configured here are applied to child categories by default.
-            </p>
-
-            {/* Claimable default */}
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-foreground">Claimable default</Label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => update("claimable", "YES")}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    values.claimable === "YES"
-                      ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                      : "bg-muted text-muted-foreground border border-transparent"
-                  }`}
-                >
-                  YES
-                </button>
-                <button
-                  type="button"
-                  onClick={() => update("claimable", "NO")}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    values.claimable === "NO"
-                      ? "bg-slate-100 text-slate-700 border border-slate-200"
-                      : "bg-muted text-muted-foreground border border-transparent"
-                  }`}
-                >
-                  NO
-                </button>
-              </div>
-            </div>
-
-            {/* RequestAllowed default */}
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-foreground">Request allowed default</Label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => update("requestAllowed", "YES")}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    values.requestAllowed === "YES"
-                      ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                      : "bg-muted text-muted-foreground border border-transparent"
-                  }`}
-                >
-                  YES
-                </button>
-                <button
-                  type="button"
-                  onClick={() => update("requestAllowed", "NO")}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    values.requestAllowed === "NO"
-                      ? "bg-slate-100 text-slate-700 border border-slate-200"
-                      : "bg-muted text-muted-foreground border border-transparent"
-                  }`}
-                >
-                  NO
-                </button>
-              </div>
-            </div>
-
-            {/* AdminCurated default */}
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-foreground">Admin curated default</Label>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => update("adminCurated", "YES")}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    values.adminCurated === "YES"
-                      ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                      : "bg-muted text-muted-foreground border border-transparent"
-                  }`}
-                >
-                  YES
-                </button>
-                <button
-                  type="button"
-                  onClick={() => update("adminCurated", "NO")}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    values.adminCurated === "NO"
-                      ? "bg-slate-100 text-slate-700 border border-slate-200"
-                      : "bg-muted text-muted-foreground border border-transparent"
-                  }`}
-                >
-                  NO
-                </button>
-                <button
-                  type="button"
-                  onClick={() => update("adminCurated", "PARTIAL")}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    values.adminCurated === "PARTIAL"
-                      ? "bg-amber-100 text-amber-800 border border-amber-200"
-                      : "bg-muted text-muted-foreground border border-transparent"
-                  }`}
-                >
-                  PARTIAL
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        </>
       )}
 
-      {/* Child overrides */}
-      {isChild && (
-        <div className="rounded-lg border bg-card p-6 shadow-sm space-y-6">
-          <h3 className="text-base font-semibold tracking-tight text-foreground">
-            Child Overrides
-          </h3>
+      {step === 2 && (
+        <>
+          <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-base font-semibold tracking-tight text-foreground">
+                  Region &amp; Visibility
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Choose where polls under this category can appear.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(["ALL", "COUNTRY", "STATE", "CITY"] as RegionScope[]).map((scope) => {
+                  const active = values.regionScope === scope;
+                  const labels: Record<RegionScope, string> = {
+                    ALL: "All regions",
+                    COUNTRY: "Country",
+                    STATE: "State",
+                    CITY: "City",
+                  };
+                  return (
+                    <button
+                      key={scope}
+                      type="button"
+                      onClick={() => setRegionScope(scope)}
+                      className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        active
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-transparent bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      {labels[scope]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-          {/* Allow Poll Creation override */}
-          <div className="space-y-3">
-            <OverrideToggle
-              id="override-allow-poll"
-              checked={overrides.allowPollCreation}
-              label="Allow Poll Creation override"
-              helper="Explicitly override the parent setting for this child category."
-              onChange={() => toggleOverride("allowPollCreation")}
-            />
+            {values.regionScope !== "ALL" && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="region-country">Country</Label>
+                  <Select value={resolvedCountry} onValueChange={handleCountryChange}>
+                    <SelectTrigger id="region-country">
+                      <SelectValue placeholder="Select a country" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {countryOptions.map((country) => (
+                        <SelectItem key={country.isoCode} value={country.isoCode}>
+                          {country.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            {overrides.allowPollCreation ? (
-              <div className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2">
+                {values.regionScope !== "COUNTRY" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="region-state">State / Province</Label>
+                    <Select
+                      value={values.state || ALL_VALUE}
+                      onValueChange={handleStateChange}
+                      disabled={!statesForCountry.length}
+                    >
+                      <SelectTrigger id="region-state">
+                        <SelectValue
+                          placeholder={
+                            statesForCountry.length
+                              ? "Select a state / province"
+                              : "Select a country first"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL_VALUE}>
+                          All states in {
+                            countryOptions.find((c) => c.isoCode === resolvedCountry)?.name ??
+                            "this country"
+                          }
+                        </SelectItem>
+                        {statesForCountry.map((state) => (
+                          <SelectItem key={state.value} value={state.value}>
+                            {state.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {values.regionScope === "CITY" && (
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="region-city">City</Label>
+                    <Select
+                      value={values.city || ALL_VALUE}
+                      onValueChange={(city) => {
+                        if (city === ALL_VALUE) {
+                          update("city", "");
+                        } else {
+                          update("city", city);
+                        }
+                      }}
+                      disabled={!citiesForState.length}
+                    >
+                      <SelectTrigger id="region-city">
+                        <SelectValue
+                          placeholder={
+                            citiesForState.length ? "Select a city" : "Select a state first"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL_VALUE}>
+                          All cities in {
+                            statesForCountry.find((s) => s.value === values.state)?.label ||
+                              countryOptions.find((c) => c.isoCode === resolvedCountry)?.name ||
+                              "this region"
+                          }
+                        </SelectItem>
+                        {citiesForState.map((city) => (
+                          <SelectItem key={city.value} value={city.value}>
+                            {city.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Parent controls */}
+          {isParent && (
+            <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
+              <h3 className="text-base font-semibold tracking-tight text-foreground">
+                Parent Defaults (Applied to children unless overridden)
+              </h3>
+              <div className="flex items-center justify-between gap-4">
                 <div className="space-y-0.5">
-                  <p className="text-xs font-medium text-foreground">Custom value</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    This child category uses its own poll creation setting.
+                  <Label htmlFor="allow-poll-creation" className="text-sm font-medium">
+                    Allow Poll Creation
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    When enabled, polls can be created under this category.
                   </p>
                 </div>
                 <Switch
+                  id="allow-poll-creation"
                   checked={values.allowPollCreation}
                   onCheckedChange={(checked) => update("allowPollCreation", checked)}
                 />
               </div>
-            ) : (
-              <InheritedField
-                label="Allow Poll Creation"
-                valueLabel={
-                  inherited?.allowPollCreation === undefined
-                    ? "From parent"
-                    : inherited.allowPollCreation
-                    ? "Allowed"
-                    : "Not allowed"
-                }
-                helper="This child follows the parent category's poll creation rule."
-              />
-            )}
-          </div>
 
-          {/* Claimable override */}
-          <div className="space-y-3">
-            <OverrideToggle
-              id="override-claimable"
-              checked={overrides.claimable}
-              label="Claimable override"
-              helper="Explicitly override whether this child category is claimable."
-              onChange={() => toggleOverride("claimable")}
-            />
-
-            {overrides.claimable ? (
-              <div className="rounded-md border bg-muted/40 px-3 py-2 space-y-2">
-                <p className="text-xs font-medium text-foreground">Custom claimable policy</p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => update("claimable", "YES")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      values.claimable === "YES"
-                        ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                        : "bg-muted text-muted-foreground border border-transparent"
-                    }`}
-                  >
-                    YES
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => update("claimable", "NO")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      values.claimable === "NO"
-                        ? "bg-slate-100 text-slate-700 border border-slate-200"
-                        : "bg-muted text-muted-foreground border border-transparent"
-                    }`}
-                  >
-                    NO
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <InheritedField
-                label="Claimable"
-                valueLabel={
-                  inherited?.claimable === "YES"
-                    ? "YES"
-                    : inherited?.claimable === "NO"
-                    ? "NO"
-                    : "From parent"
-                }
-                helper="This child follows the parent category's claimable policy."
-              />
-            )}
-          </div>
-
-          {/* Request Allowed override */}
-          <div className="space-y-3">
-            <OverrideToggle
-              id="override-request-allowed"
-              checked={overrides.requestAllowed}
-              label="Request allowed override"
-              helper="Explicitly override whether requests are allowed under this child category."
-              onChange={() => toggleOverride("requestAllowed")}
-            />
-
-            {overrides.requestAllowed ? (
-              <div className="rounded-md border bg-muted/40 px-3 py-2 space-y-2">
-                <p className="text-xs font-medium text-foreground">Custom request policy</p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => update("requestAllowed", "YES")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      values.requestAllowed === "YES"
-                        ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                        : "bg-muted text-muted-foreground border border-transparent"
-                    }`}
-                  >
-                    YES
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => update("requestAllowed", "NO")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      values.requestAllowed === "NO"
-                        ? "bg-slate-100 text-slate-700 border border-slate-200"
-                        : "bg-muted text-muted-foreground border border-transparent"
-                    }`}
-                  >
-                    NO
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <InheritedField
-                label="Request allowed"
-                valueLabel={
-                  inherited?.requestAllowed === "YES"
-                    ? "YES"
-                    : inherited?.requestAllowed === "NO"
-                    ? "NO"
-                    : "From parent"
-                }
-                helper="This child follows the parent category's request policy."
-              />
-            )}
-          </div>
-
-          {/* Admin Curated override */}
-          <div className="space-y-3">
-            <OverrideToggle
-              id="override-admin-curated"
-              checked={overrides.adminCurated}
-              label="Admin curated override"
-              helper="Explicitly override the admin curated level for this child category."
-              onChange={() => toggleOverride("adminCurated")}
-            />
-
-            {overrides.adminCurated ? (
-              <div className="rounded-md border bg-muted/40 px-3 py-2 space-y-2">
-                <p className="text-xs font-medium text-foreground">Custom admin curated level</p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => update("adminCurated", "YES")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      values.adminCurated === "YES"
-                        ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                        : "bg-muted text-muted-foreground border border-transparent"
-                    }`}
-                  >
-                    YES
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => update("adminCurated", "NO")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      values.adminCurated === "NO"
-                        ? "bg-slate-100 text-slate-700 border border-slate-200"
-                        : "bg-muted text-muted-foreground border border-transparent"
-                    }`}
-                  >
-                    NO
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => update("adminCurated", "PARTIAL")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      values.adminCurated === "PARTIAL"
-                        ? "bg-amber-100 text-amber-800 border border-amber-200"
-                        : "bg-muted text-muted-foreground border border-transparent"
-                    }`}
-                  >
-                    PARTIAL
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <InheritedField
-                label="Admin curated"
-                valueLabel={
-                  inherited?.adminCurated === "YES"
-                    ? "YES"
-                    : inherited?.adminCurated === "NO"
-                    ? "NO"
-                    : inherited?.adminCurated === "PARTIAL"
-                    ? "PARTIAL"
-                    : "From parent"
-                }
-                helper="This child follows the parent category's admin curated level."
-              />
-            )}
-          </div>
-
-          {/* Status override */}
-          <div className="space-y-3">
-            <OverrideToggle
-              id="override-status"
-              checked={overrides.status}
-              label="Status override"
-              helper="Explicitly override the parent status for this child category."
-              onChange={() => toggleOverride("status")}
-            />
-
-            {overrides.status ? (
-              <div className="rounded-md border bg-muted/40 px-3 py-2 space-y-2">
-                <p className="text-xs font-medium text-foreground">Custom status</p>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Status</Label>
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -2076,20 +1788,355 @@ export function CategoryFormPage({ mode }: CategoryFormPageProps) {
                   </button>
                 </div>
               </div>
-            ) : (
-              <InheritedField
-                label="Status"
-                valueLabel={
-                  inherited?.status === "disabled"
-                    ? "Disabled"
-                    : inherited?.status === "active"
-                    ? "Active"
-                    : "From parent"
-                }
-                helper="This child follows the parent category's status."
-              />
-            )}
+
+              <div className="mt-2 space-y-3 border-t pt-4">
+                <p className="text-xs text-muted-foreground">
+                  Policy controls configured here are applied to child categories by default.
+                </p>
+
+                {/* Claimable default */}
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-foreground">Claimable default</Label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => update("claimable", "YES")}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                        values.claimable === "YES"
+                          ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                          : "bg-muted text-muted-foreground border border-transparent"
+                      }`}
+                    >
+                      YES
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => update("claimable", "NO")}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                        values.claimable === "NO"
+                          ? "bg-slate-100 text-slate-700 border border-slate-200"
+                          : "bg-muted text-muted-foreground border border-transparent"
+                      }`}
+                    >
+                      NO
+                    </button>
+                  </div>
+                </div>
+
+                {/* RequestAllowed default */}
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-foreground">Request allowed default</Label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => update("requestAllowed", "YES")}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                        values.requestAllowed === "YES"
+                          ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                          : "bg-muted text-muted-foreground border border-transparent"
+                      }`}
+                    >
+                      YES
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => update("requestAllowed", "NO")}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                        values.requestAllowed === "NO"
+                          ? "bg-slate-100 text-slate-700 border border-slate-200"
+                          : "bg-muted text-muted-foreground border border-transparent"
+                      }`}
+                    >
+                      NO
+                    </button>
+                  </div>
+                </div>
+
+                {/* AdminCurated default */}
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-foreground">Admin curated default</Label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => update("adminCurated", "YES")}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                        values.adminCurated === "YES"
+                          ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                          : "bg-muted text-muted-foreground border border-transparent"
+                      }`}
+                    >
+                      YES
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => update("adminCurated", "NO")}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                        values.adminCurated === "NO"
+                          ? "bg-slate-100 text-slate-700 border border-slate-200"
+                          : "bg-muted text-muted-foreground border border-transparent"
+                      }`}
+                    >
+                      NO
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => update("adminCurated", "PARTIAL")}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                        values.adminCurated === "PARTIAL"
+                          ? "bg-amber-100 text-amber-800 border border-amber-200"
+                          : "bg-muted text-muted-foreground border border-transparent"
+                      }`}
+                    >
+                      PARTIAL
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {step === 3 && (
+        <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="text-base font-semibold tracking-tight text-foreground">
+                PSI Parameters for Public Profiles
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Define the parameters and weightage your PSI score will use for profiles
+                created under this category.
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={addPsiParameter}
+            >
+              + Add parameter
+            </Button>
           </div>
+
+          {psiParameters.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No PSI parameters defined yet. You can always add them later; profiles in this
+              category will then start using the updated PSI configuration.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {psiParameters.map((param, index) => (
+                <div
+                  key={param.id}
+                  className="space-y-2 rounded-md border bg-muted/40 p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-foreground">
+                        Parameter {index + 1}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Give this PSI parameter a clear name and optional description.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-[11px] text-muted-foreground hover:text-destructive"
+                      onClick={() => removePsiParameter(param.id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium" htmlFor={`psi-label-${param.id}`}>
+                      Name
+                    </Label>
+                    <Input
+                      id={`psi-label-${param.id}`}
+                      value={param.label}
+                      onChange={(e) =>
+                        updatePsiParameter(param.id, { label: e.target.value })
+                      }
+                      placeholder="e.g. Profile completeness, Activity level"
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                    <div className="space-y-2">
+                      <Label
+                        className="text-xs font-medium"
+                        htmlFor={`psi-description-${param.id}`}
+                      >
+                        Description (optional)
+                      </Label>
+                      <Textarea
+                        id={`psi-description-${param.id}`}
+                        value={param.description ?? ""}
+                        onChange={(e) =>
+                          updatePsiParameter(param.id, { description: e.target.value })
+                        }
+                        rows={2}
+                        placeholder="Explain how this parameter contributes to the PSI score."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label
+                        className="text-xs font-medium"
+                        htmlFor={`psi-weight-${param.id}`}
+                      >
+                        Weight
+                      </Label>
+                      <Input
+                        id={`psi-weight-${param.id}`}
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={Number.isFinite(param.weight) ? param.weight : 0}
+                        onChange={(e) =>
+                          updatePsiParameter(param.id, {
+                            weight: Number.isNaN(Number(e.target.value))
+                              ? 0
+                              : Number(e.target.value),
+                          })
+                        }
+                        placeholder="e.g. 1 or 0.5"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Higher weight means this parameter impacts the PSI score more.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Step 4: Claim verification requirements */}
+      {step === 4 && (
+        <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="text-base font-semibold tracking-tight text-foreground">
+                Claim Verification Requirements
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Define which documents or social media / website URLs must be submitted
+                when someone claims a profile under this category.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => addClaimRequirement("url")}
+              >
+                + Add URL field
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => addClaimRequirement("document")}
+              >
+                + Add document field
+              </Button>
+            </div>
+          </div>
+
+          {claimRequirements.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No claim verification fields defined yet. Users will still be able to claim
+              profiles using only their verified identity.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {claimRequirements.map((field, index) => (
+                <div
+                  key={field.id}
+                  className="space-y-3 rounded-md border bg-muted/40 p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-foreground">
+                        Field {index + 1}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Configure a document upload or URL field required for claim
+                        verification.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-[11px] text-muted-foreground hover:text-destructive"
+                      onClick={() => removeClaimRequirement(field.id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,1fr)]">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium" htmlFor={`req-label-${field.id}`}>
+                        Label
+                      </Label>
+                      <Input
+                        id={`req-label-${field.id}`}
+                        value={field.label}
+                        onChange={(e) =>
+                          updateClaimRequirement(field.id, { label: e.target.value })
+                        }
+                        placeholder={
+                          field.type === "url"
+                            ? "Official website / social profile URL"
+                            : "Document name (e.g. ID proof, registration certificate)"
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium" htmlFor={`req-key-${field.id}`}>
+                        Key (internal)
+                      </Label>
+                      <Input
+                        id={`req-key-${field.id}`}
+                        value={field.key}
+                        onChange={(e) =>
+                          updateClaimRequirement(field.id, { key: e.target.value })
+                        }
+                        placeholder={field.type === "url" ? "twitter_url" : "id_document"}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Used internally to map submitted values and documents.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium">Type &amp; Required</Label>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                          <span className="rounded border bg-background px-2 py-1 text-[11px] font-medium">
+                            {field.type === "url" ? "URL" : "Document"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-muted-foreground">Required</span>
+                          <Switch
+                            checked={field.required}
+                            onCheckedChange={(checked) =>
+                              updateClaimRequirement(field.id, { required: checked })
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -2104,19 +2151,41 @@ export function CategoryFormPage({ mode }: CategoryFormPageProps) {
             Preview impact of parent changes
           </Button>
         )}
-        <div className="ml-auto flex gap-2">
+        <div className="flex items-center justify-between border-t bg-card px-6 py-3">
           <Button
             type="button"
-            variant="outline"
             size="sm"
-            disabled={saving}
+            variant="outline"
             onClick={() => navigate("/admin/categories")}
           >
             Cancel
           </Button>
-          <Button type="submit" size="sm" disabled={saving}>
-            {mode === "create" ? "Save category" : "Save changes"}
-          </Button>
+          <div className="flex items-center gap-2">
+            {step > 1 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setStep((prev) => Math.max(1, prev - 1))}
+              >
+                Back
+              </Button>
+            )}
+            {step < totalSteps && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setStep((prev) => Math.min(totalSteps, prev + 1))}
+              >
+                Next
+              </Button>
+            )}
+            {step === totalSteps && (
+              <Button type="submit" size="sm" disabled={saving}>
+                {mode === "create" ? "Save category" : "Save changes"}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -33,6 +33,12 @@ const items = [
     disabled: false,
   },
   {
+    label: "Ticket Center",
+    icon: ListChecks,
+    path: "/admin/tickets",
+    disabled: false,
+  },
+  {
     label: "Profile Directory",
     icon: Users,
     path: "/admin/profile-directory",

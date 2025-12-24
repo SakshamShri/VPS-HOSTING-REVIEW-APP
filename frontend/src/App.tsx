@@ -19,6 +19,7 @@ import { UserPollCreatePage } from "./pages/UserPollCreatePage";
 import { InviteLandingPage } from "./pages/InviteLandingPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFound } from "./pages/NotFound";
+import { TicketCenterPage } from "./pages/TicketCenterPage";
 
 function App() {
   return (
@@ -31,6 +32,17 @@ function App() {
             subtitle="High-level overview for admins."
           >
             <Dashboard />
+          </AdminLayout>
+        }
+      />
+      <Route
+        path="/admin/tickets"
+        element={
+          <AdminLayout
+            title="Ticket Center"
+            subtitle="Review profile claims and new profile requests."
+          >
+            <TicketCenterPage />
           </AdminLayout>
         }
       />

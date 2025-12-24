@@ -7,6 +7,23 @@ export type YesNo = "YES" | "NO";
 export type AdminCurated = "YES" | "NO" | "PARTIAL";
 export type RegionScope = "ALL" | "COUNTRY" | "STATE" | "CITY";
 
+export interface PsiParameter {
+  id: string;
+  label: string;
+  description?: string;
+  weight: number;
+}
+
+export type ClaimRequirementFieldType = "url" | "document";
+
+export interface ClaimRequirementField {
+  id: string;
+  key: string;
+  label: string;
+  type: ClaimRequirementFieldType;
+  required: boolean;
+}
+
 export interface CategoryFormValues {
   id?: string;
   name: string;
@@ -24,6 +41,10 @@ export interface CategoryFormValues {
   claimable: YesNo;
   requestAllowed: YesNo;
   adminCurated: AdminCurated;
+  // PSI parameters for public profiles under this category
+  psiParameters?: PsiParameter[];
+  // Claim verification requirements for profiles under this category
+  claimRequirements?: ClaimRequirementField[];
 }
 
 export interface InheritedStates {

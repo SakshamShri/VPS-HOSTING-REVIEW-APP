@@ -11,6 +11,9 @@ categoryRouter.post("/categories", requireAdmin, (req, res) =>
 categoryRouter.put("/categories/:id", requireAdmin, (req, res) =>
   categoryController.update(req, res)
 );
+categoryRouter.delete("/categories/:id", requireAdmin, (req, res) =>
+  categoryController.delete(req, res)
+);
 categoryRouter.get("/categories/tree", requireAdmin, (req, res) =>
   categoryController.getTree(req, res)
 );
