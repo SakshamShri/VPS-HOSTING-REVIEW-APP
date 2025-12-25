@@ -8,17 +8,29 @@ import type { CategoryId } from "../types/category.types";
 
 export type UserPollType = "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "RATING" | "YES_NO";
 export type UserPollStatus = "DRAFT" | "LIVE" | "SCHEDULED" | "CLOSED";
+export type UserPollInviteStatus = "PENDING" | "ACCEPTED" | "REJECTED";
+
+export interface UserPollOptionInput {
+  label: string;
+  imageUrl?: string | null;
+}
 
 export interface CreateUserPollInput {
   categoryId: CategoryId;
   type: UserPollType;
   title: string;
   description?: string | null;
-  options: string[];
+  options: UserPollOptionInput[];
   startMode: "INSTANT" | "SCHEDULED";
   startAt?: Date | null;
   endAt?: Date | null;
   sourceInfo?: string | null;
+}
+
+export interface GroupMemberInput {
+  mobile: string;
+  name?: string | null;
+  bio?: string | null;
 }
 
 export interface CreateUserPollInvitesInput {
@@ -117,8 +129,9 @@ export class UserPollService {
         start_at: startAt,
         end_at: endAt,
         options: {
-          create: input.options.map((label, index) => ({
-            label,
+          create: input.options.map((opt, index) => ({
+            label: opt.label,
+            image_url: opt.imageUrl ?? null,
             display_order: index,
           })),
         },
@@ -128,51 +141,163 @@ export class UserPollService {
     return poll;
   }
 
-	async createOwnerInviteForUser(userId: bigint, pollId: bigint): Promise<{ token: string }> {
-		const poll = await prisma.userPoll.findUnique({ where: { id: pollId } });
-		if (!poll) {
-			const err = new Error("POLL_NOT_FOUND");
-			(err as any).code = "POLL_NOT_FOUND";
-			throw err;
-		}
+  async listPollsForUser(userId: bigint) {
+    const polls = await prisma.userPoll.findMany({
+      where: { creator_id: userId },
+      include: { invites: true },
+      orderBy: { created_at: "desc" },
+    });
 
-		// Only allow owner share-link invites for live, invite-only polls
-		if (poll.status !== "LIVE") {
-			const err = new Error("POLL_NOT_LIVE");
-			(err as any).code = "POLL_NOT_LIVE";
-			throw err;
-		}
-		if (!poll.is_invite_only) {
-			const err = new Error("POLL_NOT_INVITE_ONLY");
-			(err as any).code = "POLL_NOT_INVITE_ONLY";
-			throw err;
-		}
+    return polls.map((p: any) => {
+      const invites = (p.invites ?? []) as Array<{ status: string }>;
+      let accepted = 0;
+      let pending = 0;
+      let rejected = 0;
+      for (const inv of invites) {
+        if (inv.status === "ACCEPTED") accepted += 1;
+        else if (inv.status === "PENDING") pending += 1;
+        else if (inv.status === "REJECTED") rejected += 1;
+      }
 
-		// If this user already has an invite for this poll (and hasn't fully rejected it), reuse it
-		const existing = await prisma.userPollInvite.findFirst({
-			where: {
-				poll_id: pollId,
-				user_id: userId,
-			},
-		});
+      return {
+        id: p.id.toString(),
+        title: p.title as string,
+        description: (p.description as string | null) ?? null,
+        type: p.type as UserPollType,
+        status: p.status as UserPollStatus,
+        start_at: p.start_at as Date | null,
+        end_at: p.end_at as Date | null,
+        total_invites: invites.length,
+        accepted_count: accepted,
+        pending_count: pending,
+        rejected_count: rejected,
+      };
+    });
+  }
 
-		if (existing && existing.status !== "REJECTED") {
-			return { token: existing.token };
-		}
+  async getPollDetailForUser(userId: bigint, pollId: bigint) {
+    const poll = await prisma.userPoll.findUnique({
+      where: { id: pollId },
+      include: { invites: true },
+    });
 
-		const token = randomUUID();
-		const invite = await prisma.userPollInvite.create({
-			data: {
-				poll_id: pollId,
-				user_id: userId,
-				mobile: `user:${userId.toString()}`,
-				token,
-				status: "PENDING",
-			},
-		});
+    if (!poll || poll.creator_id !== userId) {
+      const err = new Error("NOT_FOUND_OR_FORBIDDEN");
+      (err as any).code = "NOT_FOUND_OR_FORBIDDEN";
+      throw err;
+    }
 
-		return { token: invite.token };
-	}
+    const invites = (poll.invites ?? []) as Array<{
+      mobile: string;
+      status: UserPollInviteStatus;
+    }>;
+
+    // Preload all group members for this user so we can attach names/bios by mobile
+    const groups = await prisma.userInviteGroup.findMany({
+      where: { owner_id: userId },
+      include: { members: true },
+    });
+
+    const metaByMobile = new Map<
+      string,
+      {
+        name: string | null;
+        bio: string | null;
+      }
+    >();
+
+    for (const g of groups) {
+      for (const m of g.members) {
+        const key = m.mobile;
+        if (!metaByMobile.has(key)) {
+          metaByMobile.set(key, {
+            name: (m as any).name ?? null,
+            bio: (m as any).bio ?? null,
+          });
+        }
+      }
+    }
+
+    let accepted = 0;
+    let pending = 0;
+    let rejected = 0;
+
+    const inviteSummaries = invites.map((inv) => {
+      if (inv.status === "ACCEPTED") accepted += 1;
+      else if (inv.status === "PENDING") pending += 1;
+      else if (inv.status === "REJECTED") rejected += 1;
+
+      const meta = metaByMobile.get(inv.mobile) ?? { name: null, bio: null };
+
+      return {
+        mobile: inv.mobile,
+        name: meta.name,
+        bio: meta.bio,
+        status: inv.status,
+      };
+    });
+
+    return {
+      id: poll.id.toString(),
+      title: poll.title as string,
+      description: (poll.description as string | null) ?? null,
+      type: poll.type as UserPollType,
+      status: poll.status as UserPollStatus,
+      start_at: poll.start_at as Date | null,
+      end_at: poll.end_at as Date | null,
+      total_invites: invites.length,
+      accepted_count: accepted,
+      pending_count: pending,
+      rejected_count: rejected,
+      invites: inviteSummaries,
+    };
+  }
+
+  async createOwnerInviteForUser(userId: bigint, pollId: bigint): Promise<{ token: string }> {
+    const poll = await prisma.userPoll.findUnique({ where: { id: pollId } });
+    if (!poll) {
+      const err = new Error("POLL_NOT_FOUND");
+      (err as any).code = "POLL_NOT_FOUND";
+      throw err;
+    }
+
+    // Only allow owner share-link invites for live, invite-only polls
+    if (poll.status !== "LIVE") {
+      const err = new Error("POLL_NOT_LIVE");
+      (err as any).code = "POLL_NOT_LIVE";
+      throw err;
+    }
+    if (!poll.is_invite_only) {
+      const err = new Error("POLL_NOT_INVITE_ONLY");
+      (err as any).code = "POLL_NOT_INVITE_ONLY";
+      throw err;
+    }
+
+    // If this user already has an invite for this poll (and hasn't fully rejected it), reuse it
+    const existing = await prisma.userPollInvite.findFirst({
+      where: {
+        poll_id: pollId,
+        user_id: userId,
+      },
+    });
+
+    if (existing && existing.status !== "REJECTED") {
+      return { token: existing.token };
+    }
+
+    const token = randomUUID();
+    const invite = await prisma.userPollInvite.create({
+      data: {
+        poll_id: pollId,
+        user_id: userId,
+        mobile: `user:${userId.toString()}`,
+        token,
+        status: "PENDING",
+      },
+    });
+
+    return { token: invite.token };
+  }
 
   async createInvitesForPoll(
     userId: bigint,
@@ -281,30 +406,61 @@ export class UserPollService {
     return groups.map((g) => ({
       id: g.id.toString(),
       name: g.name,
-      members: g.members.map((m) => m.mobile),
+      tags: (g as any).tags ?? [],
+      photo_url: (g as any).photo_url ?? null,
+      members: g.members.map((m) => ({
+        mobile: m.mobile,
+        name: (m as any).name ?? null,
+        bio: (m as any).bio ?? null,
+      })),
     }));
   }
 
-  async createGroupForUser(userId: bigint, name: string, mobiles: string[]) {
+  async createGroupForUser(
+    userId: bigint,
+    name: string,
+    members: GroupMemberInput[],
+    tags: string[]
+  ) {
     const group = await prisma.userInviteGroup.create({
       data: {
         owner_id: userId,
         name,
+        // Cast through any so this compiles even if Prisma client types haven't picked up tags yet
+        tags: tags as any,
         members: {
-          create: mobiles.map((m) => ({ mobile: normalizeMobile(m) })),
+          create: members.map((m) => ({
+            mobile: normalizeMobile(m.mobile),
+            name: m.name ?? null,
+            bio: m.bio ?? null,
+          })),
         },
-      },
+      } as any,
       include: { members: true },
     });
 
+    const groupAny = group as any;
+
     return {
-      id: group.id.toString(),
-      name: group.name,
-      members: group.members.map((m) => m.mobile),
+      id: groupAny.id.toString(),
+      name: groupAny.name,
+      tags: groupAny.tags ?? [],
+      photo_url: groupAny.photo_url ?? null,
+      members: (groupAny.members ?? []).map((m: any) => ({
+        mobile: m.mobile,
+        name: m.name ?? null,
+        bio: m.bio ?? null,
+      })),
     };
   }
 
-  async updateGroupForUser(userId: bigint, groupId: bigint, name: string, mobiles: string[]) {
+  async updateGroupForUser(
+    userId: bigint,
+    groupId: bigint,
+    name: string,
+    members: GroupMemberInput[],
+    tags: string[],
+  ) {
     const existing = await prisma.userInviteGroup.findFirst({
       where: { id: groupId, owner_id: userId },
     });
@@ -318,16 +474,19 @@ export class UserPollService {
     await prisma.$transaction(async (tx) => {
       await tx.userInviteGroup.update({
         where: { id: groupId },
-        data: { name },
+        // Cast through any so additional fields don't break older Prisma client types
+        data: { name, tags } as any,
       });
 
       await tx.userInviteGroupMember.deleteMany({ where: { group_id: groupId } });
 
-      if (mobiles.length > 0) {
+      if (members.length > 0) {
         await tx.userInviteGroupMember.createMany({
-          data: mobiles.map((m) => ({
+          data: members.map((m) => ({
             group_id: groupId,
-            mobile: normalizeMobile(m),
+            mobile: normalizeMobile(m.mobile),
+            name: m.name ?? null,
+            bio: m.bio ?? null,
           })),
         });
       }
@@ -347,7 +506,200 @@ export class UserPollService {
     return {
       id: updated.id.toString(),
       name: updated.name,
-      members: updated.members.map((m) => m.mobile),
+      tags: (updated as any).tags ?? [],
+      photo_url: (updated as any).photo_url ?? null,
+      members: updated.members.map((m) => ({
+        mobile: m.mobile,
+        name: (m as any).name ?? null,
+        bio: (m as any).bio ?? null,
+      })),
+    };
+  }
+
+  async listInvitedPollsForUser(userId: bigint) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      const err = new Error("USER_NOT_FOUND");
+      (err as any).code = "USER_NOT_FOUND";
+      throw err;
+    }
+
+    const orConditions: any[] = [{ user_id: userId }];
+    if (user.mobile) {
+      orConditions.push({ mobile: user.mobile });
+    }
+
+    const invites = await prisma.userPollInvite.findMany({
+      where: {
+        OR: orConditions,
+      },
+      include: {
+        poll: true,
+      },
+      orderBy: {
+        created_at: "desc",
+      },
+    });
+
+    const now = new Date();
+
+    return invites
+      .filter((inv) => !!inv.poll)
+      .map((inv) => {
+        const poll = inv.poll as any;
+        const startAt: Date | null = poll.start_at ?? null;
+        const endAt: Date | null = poll.end_at ?? null;
+
+        let state: "ONGOING" | "FUTURE" | "EXPIRED" = "ONGOING";
+
+        if (poll.status === "CLOSED") {
+          state = "EXPIRED";
+        } else if (startAt && startAt > now) {
+          state = "FUTURE";
+        } else if (endAt && endAt <= now) {
+          state = "EXPIRED";
+        } else if (poll.status === "SCHEDULED") {
+          state = "FUTURE";
+        } else {
+          state = "ONGOING";
+        }
+
+        return {
+          pollId: poll.id.toString(),
+          title: poll.title as string,
+          description: (poll.description as string | null) ?? null,
+          pollStatus: poll.status as UserPollStatus,
+          start_at: startAt,
+          end_at: endAt,
+          inviteStatus: inv.status as any,
+          state,
+          token: inv.token,
+        };
+      });
+  }
+
+  async endPollForUser(userId: bigint, pollId: bigint) {
+    const poll = await prisma.userPoll.findUnique({
+      where: { id: pollId },
+      include: { invites: true },
+    });
+
+    if (!poll || poll.creator_id !== userId) {
+      const err = new Error("NOT_FOUND_OR_FORBIDDEN");
+      (err as any).code = "NOT_FOUND_OR_FORBIDDEN";
+      throw err;
+    }
+
+    if (poll.status !== "LIVE" && poll.status !== "SCHEDULED" && poll.status !== "CLOSED") {
+      const err = new Error("INVALID_STATUS");
+      (err as any).code = "INVALID_STATUS";
+      throw err;
+    }
+
+    const nextEndAt = poll.end_at ?? new Date();
+
+    const updated = poll.status === "CLOSED"
+      ? poll
+      : await prisma.userPoll.update({
+          where: { id: pollId },
+          data: {
+            status: "CLOSED",
+            end_at: nextEndAt,
+          },
+          include: { invites: true },
+        });
+
+    const invites = (updated.invites ?? []) as Array<{ status: string }>;
+    let accepted = 0;
+    let pending = 0;
+    let rejected = 0;
+    for (const inv of invites) {
+      if (inv.status === "ACCEPTED") accepted += 1;
+      else if (inv.status === "PENDING") pending += 1;
+      else if (inv.status === "REJECTED") rejected += 1;
+    }
+
+    return {
+      id: updated.id.toString(),
+      title: updated.title as string,
+      description: (updated.description as string | null) ?? null,
+      type: updated.type as UserPollType,
+      status: updated.status as UserPollStatus,
+      start_at: updated.start_at as Date | null,
+      end_at: updated.end_at as Date | null,
+      total_invites: invites.length,
+      accepted_count: accepted,
+      pending_count: pending,
+      rejected_count: rejected,
+    };
+  }
+
+  async extendPollForUser(userId: bigint, pollId: bigint, newEndAt: Date) {
+    const now = new Date();
+    if (!(newEndAt instanceof Date) || Number.isNaN(newEndAt.getTime())) {
+      const err = new Error("INVALID_END_AT");
+      (err as any).code = "INVALID_END_AT";
+      throw err;
+    }
+    if (newEndAt <= now) {
+      const err = new Error("END_AT_IN_PAST");
+      (err as any).code = "END_AT_IN_PAST";
+      throw err;
+    }
+
+    const poll = await prisma.userPoll.findUnique({
+      where: { id: pollId },
+      include: { invites: true },
+    });
+
+    if (!poll || poll.creator_id !== userId) {
+      const err = new Error("NOT_FOUND_OR_FORBIDDEN");
+      (err as any).code = "NOT_FOUND_OR_FORBIDDEN";
+      throw err;
+    }
+
+    if (poll.start_at && newEndAt <= poll.start_at) {
+      const err = new Error("END_AT_BEFORE_START");
+      (err as any).code = "END_AT_BEFORE_START";
+      throw err;
+    }
+
+    if (poll.status === "CLOSED") {
+      const err = new Error("POLL_ALREADY_CLOSED");
+      (err as any).code = "POLL_ALREADY_CLOSED";
+      throw err;
+    }
+
+    const updated = await prisma.userPoll.update({
+      where: { id: pollId },
+      data: {
+        end_at: newEndAt,
+      },
+      include: { invites: true },
+    });
+
+    const invites = (updated.invites ?? []) as Array<{ status: string }>;
+    let accepted = 0;
+    let pending = 0;
+    let rejected = 0;
+    for (const inv of invites) {
+      if (inv.status === "ACCEPTED") accepted += 1;
+      else if (inv.status === "PENDING") pending += 1;
+      else if (inv.status === "REJECTED") rejected += 1;
+    }
+
+    return {
+      id: updated.id.toString(),
+      title: updated.title as string,
+      description: (updated.description as string | null) ?? null,
+      type: updated.type as UserPollType,
+      status: updated.status as UserPollStatus,
+      start_at: updated.start_at as Date | null,
+      end_at: updated.end_at as Date | null,
+      total_invites: invites.length,
+      accepted_count: accepted,
+      pending_count: pending,
+      rejected_count: rejected,
     };
   }
 }

@@ -52,6 +52,16 @@ const sections: NavSection[] = [
         icon: ListChecks,
       },
       {
+        label: "My Polls",
+        path: "/user/polls",
+        icon: ListChecks,
+      },
+      {
+        label: "Poll Invitations",
+        path: "/user/poll-invitations",
+        icon: ListChecks,
+      },
+      {
         label: "My Groups",
         path: "/user/groups",
         icon: Users,

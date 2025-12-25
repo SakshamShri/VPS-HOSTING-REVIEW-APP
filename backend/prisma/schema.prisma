@@ -417,6 +417,7 @@ model UserPollOption {
   poll_id       BigInt
   poll          UserPoll @relation(fields: [poll_id], references: [id])
   label         String
+  image_url     String?  @db.Text
   display_order Int
 }
 
@@ -427,6 +428,10 @@ model UserInviteGroup {
   name       String
   created_at DateTime @default(now())
 
+  tags    String[] @default([])
+
+  photo_url String? @db.Text
+
   members UserInviteGroupMember[]
 }
 
@@ -435,6 +440,8 @@ model UserInviteGroupMember {
   group_id BigInt
   group    UserInviteGroup @relation(fields: [group_id], references: [id])
   mobile   String          @db.VarChar(32)
+  name     String?
+  bio      String?         @db.Text
 }
 
 model UserPollInvite {

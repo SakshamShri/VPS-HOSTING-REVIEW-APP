@@ -4,13 +4,21 @@ import { z } from "zod";
 
 import type { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { userPollService } from "../services/userPoll.service";
+import { prisma } from "../utils/db";
 
 const createPollSchema = z.object({
   category_id: z.string().min(1),
   type: z.enum(["SINGLE_CHOICE", "MULTIPLE_CHOICE", "RATING", "YES_NO"]),
   title: z.string().min(1),
   description: z.string().optional().nullable(),
-  options: z.array(z.string().min(1)).min(2),
+  options: z
+    .array(
+      z.object({
+        label: z.string().min(1),
+        image_url: z.string().url().optional().nullable(),
+      })
+    )
+    .min(2),
   start_mode: z.enum(["INSTANT", "SCHEDULED"]),
   start_at: z.string().datetime().optional().nullable(),
   end_at: z.string().datetime().optional().nullable(),
@@ -29,14 +37,26 @@ const createInvitesSchema = z.object({
     .nullable(),
 });
 
+const groupMemberSchema = z.object({
+  mobile: z.string().min(1),
+  name: z.string().optional().nullable(),
+  bio: z.string().optional().nullable(),
+});
+
 const createGroupSchema = z.object({
   name: z.string().min(1),
-  mobiles: z.array(z.string().min(1)).min(1),
+  tags: z.array(z.string().min(1)).optional().default([]),
+  members: z.array(groupMemberSchema).min(1),
 });
 
 const updateGroupSchema = z.object({
   name: z.string().min(1),
-  mobiles: z.array(z.string().min(1)).min(1),
+  tags: z.array(z.string().min(1)).optional().default([]),
+  members: z.array(groupMemberSchema).min(1),
+});
+
+const extendPollSchema = z.object({
+  end_at: z.string().datetime(),
 });
 
 export async function createUserPollHandler(req: AuthenticatedRequest, res: Response) {
@@ -80,7 +100,7 @@ export async function createUserPollHandler(req: AuthenticatedRequest, res: Resp
       type: parsed.type,
       title: parsed.title,
       description: parsed.description ?? null,
-      options: parsed.options,
+      options: parsed.options.map((o) => ({ label: o.label, imageUrl: o.image_url ?? null })),
       startMode: parsed.start_mode,
       startAt,
       endAt,
@@ -233,7 +253,12 @@ export async function createUserGroupHandler(req: AuthenticatedRequest, res: Res
 
     const parsed = createGroupSchema.parse(req.body);
 
-    const group = await userPollService.createGroupForUser(req.user.id, parsed.name, parsed.mobiles);
+    const group = await userPollService.createGroupForUser(
+      req.user.id,
+      parsed.name,
+      parsed.members,
+      parsed.tags ?? [],
+    );
     return res.status(201).json({ group });
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -264,7 +289,8 @@ export async function updateUserGroupHandler(req: AuthenticatedRequest, res: Res
       req.user.id,
       groupId,
       parsed.name,
-      parsed.mobiles
+      parsed.members,
+      parsed.tags ?? [],
     );
 
     return res.status(200).json({ group });
@@ -280,5 +306,203 @@ export async function updateUserGroupHandler(req: AuthenticatedRequest, res: Res
     // eslint-disable-next-line no-console
     console.error(err);
     return res.status(500).json({ message: "Failed to update group" });
+  }
+}
+
+export async function listUserPollInvitationsHandler(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const invites = await userPollService.listInvitedPollsForUser(req.user.id);
+    return res.status(200).json({ invites });
+  } catch (err) {
+    const code = (err as any)?.code as string | undefined;
+    if (code === "USER_NOT_FOUND") {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ message: "Failed to fetch poll invitations" });
+  }
+}
+
+export async function listUserPollsHandler(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const polls = await userPollService.listPollsForUser(req.user.id);
+    return res.status(200).json({ polls });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ message: "Failed to fetch polls" });
+  }
+}
+
+export async function endUserPollHandler(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const pollIdParam = req.params.id;
+    if (!pollIdParam) {
+      return res.status(400).json({ message: "Poll id is required" });
+    }
+
+    const pollId = BigInt(pollIdParam);
+    const result = await userPollService.endPollForUser(req.user.id, pollId);
+    return res.status(200).json({ poll: result });
+  } catch (err) {
+    const code = (err as any)?.code as string | undefined;
+    if (code === "NOT_FOUND_OR_FORBIDDEN") {
+      return res.status(404).json({ message: "Poll not found" });
+    }
+    if (code === "INVALID_STATUS") {
+      return res.status(400).json({ message: "Poll status does not allow ending" });
+    }
+
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ message: "Failed to end poll" });
+  }
+}
+
+export async function extendUserPollHandler(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const pollIdParam = req.params.id;
+    if (!pollIdParam) {
+      return res.status(400).json({ message: "Poll id is required" });
+    }
+
+    const pollId = BigInt(pollIdParam);
+    const parsed = extendPollSchema.parse(req.body);
+    const newEndAt = new Date(parsed.end_at);
+
+    const result = await userPollService.extendPollForUser(req.user.id, pollId, newEndAt);
+    return res.status(200).json({ poll: result });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ message: "Invalid payload", issues: err.errors });
+    }
+
+    const code = (err as any)?.code as string | undefined;
+    if (code === "NOT_FOUND_OR_FORBIDDEN") {
+      return res.status(404).json({ message: "Poll not found" });
+    }
+    if (code === "INVALID_END_AT" || code === "END_AT_IN_PAST" || code === "END_AT_BEFORE_START") {
+      return res.status(400).json({ message: "Invalid end_at for poll" });
+    }
+    if (code === "POLL_ALREADY_CLOSED") {
+      return res.status(400).json({ message: "Poll is already closed" });
+    }
+
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ message: "Failed to extend poll" });
+  }
+}
+
+export async function getUserPollDetailHandler(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const pollIdParam = req.params.id;
+    if (!pollIdParam) {
+      return res.status(400).json({ message: "Poll id is required" });
+    }
+
+    const pollId = BigInt(pollIdParam);
+    const poll = await userPollService.getPollDetailForUser(req.user.id, pollId);
+    return res.status(200).json({ poll });
+  } catch (err) {
+    const code = (err as any)?.code as string | undefined;
+    if (code === "NOT_FOUND_OR_FORBIDDEN") {
+      return res.status(404).json({ message: "Poll not found" });
+    }
+
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ message: "Failed to fetch poll details" });
+  }
+}
+
+export async function uploadUserPollOptionImageHandler(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const file = (req as any).file as { path: string } | undefined;
+    if (!file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    // Store as a relative URL under /uploads so the frontend can render it directly
+    const parts = file.path.split("user-poll-options");
+    const suffix = parts.length > 1 ? parts[1] : "";
+    const relativePath = `/uploads/user-poll-options${suffix}`;
+
+    return res.status(200).json({ image_url: relativePath });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ message: "Failed to upload option image" });
+  }
+}
+
+export async function uploadUserGroupPhotoHandler(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const groupIdParam = req.params.id;
+    if (!groupIdParam) {
+      return res.status(400).json({ message: "Group id is required" });
+    }
+
+    const groupId = BigInt(groupIdParam);
+
+    const file = (req as any).file as { path: string } | undefined;
+    if (!file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const group = await prisma.userInviteGroup.findFirst({
+      where: { id: groupId, owner_id: req.user.id },
+    });
+
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    const parts = file.path.split("user-group-photos");
+    const suffix = parts.length > 1 ? parts[1] : "";
+    const relativePath = `/uploads/user-group-photos${suffix}`;
+
+    const updated = await prisma.userInviteGroup.update({
+      where: { id: groupId },
+      // Cast through any so additional fields don't break older Prisma client types
+      data: { photo_url: relativePath } as any,
+    });
+
+    const updatedAny = updated as any;
+    return res.status(200).json({ photo_url: updatedAny.photo_url ?? relativePath });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ message: "Failed to upload group photo" });
   }
 }

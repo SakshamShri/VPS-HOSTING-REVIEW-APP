@@ -22,6 +22,8 @@ import { InviteLandingPage } from "./pages/InviteLandingPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFound } from "./pages/NotFound";
 import { TicketCenterPage } from "./pages/TicketCenterPage";
+import { UserMyPollsPage } from "./pages/UserMyPollsPage";
+import { UserPollInvitationsPage } from "./pages/UserPollInvitationsPage";
 
 function App() {
   return (
@@ -152,6 +154,8 @@ function App() {
       <Route path="/user/home" element={<UserHomePage />} />
       <Route path="/user/groups" element={<UserGroupsPage />} />
       <Route path="/user/feed" element={<UserFeedPage />} />
+      <Route path="/user/polls" element={<UserMyPollsPage />} />
+      <Route path="/user/poll-invitations" element={<UserPollInvitationsPage />} />
       <Route path="/user/trending" element={<UserTrendingPage />} />
       <Route path="/user/trending/:id/vote" element={<UserTrendingVotePage />} />
       <Route path="/profiles" element={<UserPublicProfilesPage />} />

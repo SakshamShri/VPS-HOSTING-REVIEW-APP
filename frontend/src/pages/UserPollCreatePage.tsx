@@ -9,6 +9,7 @@ import {
   createUserPoll,
   createUserPollInvites,
   fetchInviteGroups,
+  uploadUserPollOptionImage,
   type InviteDTO,
   type InviteGroupDTO,
   type UserPollType,
@@ -16,7 +17,7 @@ import {
 import { fetchUserClaimableCategories, type UserCategoryNode } from "../api/userCategory.api";
 import { UserLayout } from "../layout/UserLayout";
 
-type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
+type WizardStep = 1 | 2 | 3 | 4 | 5;
 
 const POLL_TYPES: { id: UserPollType; label: string; description: string }[] = [
   { id: "SINGLE_CHOICE", label: "Single choice", description: "Participants pick one option." },
@@ -33,7 +34,10 @@ export function UserPollCreatePage() {
   const [description, setDescription] = useState("");
   const [sourceInfo, setSourceInfo] = useState("");
 
-  const [options, setOptions] = useState<string[]>(["Option 1", "Option 2"]);
+  const [options, setOptions] = useState<{ label: string; imageUrl: string }[]>([
+    { label: "", imageUrl: "" },
+    { label: "", imageUrl: "" },
+  ]);
 
   const [startMode, setStartMode] = useState<"INSTANT" | "SCHEDULED">("INSTANT");
   const [startAt, setStartAt] = useState<string>("");
@@ -54,12 +58,10 @@ export function UserPollCreatePage() {
   const [categories, setCategories] = useState<UserCategoryNode[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [uploadingOptionIndex, setUploadingOptionIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    if (step === 1) {
-      void loadCategories();
-    }
-    if (step === 6) {
+    if (step === 5) {
       void loadGroups();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,6 +72,23 @@ export function UserPollCreatePage() {
       setCategoriesLoading(true);
       const nodes = await fetchUserClaimableCategories();
       setCategories(nodes);
+
+      // Auto-select the first available child category so the user doesn't have to choose.
+      const selectFirstChild = (items: UserCategoryNode[]): string | null => {
+        for (const node of items) {
+          if (node.type === "child") return node.id;
+          if (node.children && node.children.length) {
+            const fromChild = selectFirstChild(node.children as any);
+            if (fromChild) return fromChild;
+          }
+        }
+        return null;
+      };
+
+      const firstChildId = selectFirstChild(nodes);
+      if (firstChildId) {
+        setSelectedCategoryId(firstChildId);
+      }
     } catch (err) {
       console.error(err);
       const message = (err as Error).message || "Failed to load categories";
@@ -82,6 +101,12 @@ export function UserPollCreatePage() {
       setCategoriesLoading(false);
     }
   };
+
+  // Load categories once in the background so we can attach the poll to a valid category
+  useEffect(() => {
+    void loadCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadGroups = async () => {
     try {
@@ -97,7 +122,7 @@ export function UserPollCreatePage() {
   };
 
   const handleAddOption = () => {
-    setOptions((prev) => [...prev, `Option ${prev.length + 1}`]);
+    setOptions((prev) => [...prev, { label: "", imageUrl: "" }]);
   };
 
   const handleRemoveOption = (index: number) => {
@@ -110,12 +135,33 @@ export function UserPollCreatePage() {
     );
   };
 
+  const handleOptionImagePick = async (index: number, file: File | null) => {
+    if (!file) return;
+
+    try {
+      setUploadingOptionIndex(index);
+      const imageUrl = await uploadUserPollOptionImage(file);
+      setOptions((prev) =>
+        prev.map((opt, idx) => (idx === index ? { ...opt, imageUrl } : opt))
+      );
+    } catch (err) {
+      console.error(err);
+      const msg = (err as Error).message || "Failed to upload option image";
+      if (msg.startsWith("AUTH_REQUIRED:")) {
+        setError(msg.replace("AUTH_REQUIRED:", ""));
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setUploadingOptionIndex(null);
+    }
+  };
+
   const canGoNext = () => {
-    if (step === 1) return !!selectedCategoryId;
-    if (step === 2) return !!pollType;
-    if (step === 3) return title.trim().length > 0;
-    if (step === 4) return options.filter((o) => o.trim().length > 0).length >= 2;
-    if (step === 5) {
+    if (step === 1) return !!pollType;
+    if (step === 2) return title.trim().length > 0;
+    if (step === 3) return options.filter((o) => o.label.trim().length > 0).length >= 2;
+    if (step === 4) {
       const now = new Date();
       if (startMode === "SCHEDULED") {
         if (!startAt) return false;
@@ -137,7 +183,10 @@ export function UserPollCreatePage() {
   };
 
   const handlePublish = async () => {
-    if (!pollType || !selectedCategoryId) return;
+    if (!pollType || !selectedCategoryId) {
+      setError("No valid category is available for this poll.");
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -149,7 +198,12 @@ export function UserPollCreatePage() {
         type: pollType,
         title: title.trim(),
         description: description.trim() || null,
-        options: options.map((o) => o.trim()).filter(Boolean),
+        options: options
+          .map((o) => ({
+            label: o.label.trim(),
+            image_url: o.imageUrl.trim() || null,
+          }))
+          .filter((o) => o.label.length > 0),
         start_mode: startMode,
         start_at: startMode === "SCHEDULED" && startAt ? new Date(startAt).toISOString() : null,
         end_at: endAt ? new Date(endAt).toISOString() : null,
@@ -190,12 +244,11 @@ export function UserPollCreatePage() {
 
   const renderStepHeader = () => {
     const steps: { id: WizardStep; label: string }[] = [
-      { id: 1, label: "Category" },
-      { id: 2, label: "Type" },
-      { id: 3, label: "Details" },
-      { id: 4, label: "Options" },
-      { id: 5, label: "Timing" },
-      { id: 6, label: "Publish" },
+      { id: 1, label: "Type" },
+      { id: 2, label: "Details" },
+      { id: 3, label: "Options" },
+      { id: 4, label: "Timing" },
+      { id: 5, label: "Publish" },
     ];
 
     return (
@@ -224,63 +277,6 @@ export function UserPollCreatePage() {
 
   const renderStep = () => {
     if (step === 1) {
-      return (
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Category
-            </p>
-            <p className="text-[11px] text-muted-foreground">
-              Choose where this poll should live. You can only select categories that allow claims
-              and user requests.
-            </p>
-          </div>
-
-          {categoriesLoading ? (
-            <p className="text-[11px] text-muted-foreground">Loading categories…</p>
-          ) : categories.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground">
-              No claimable categories are available for end-user polls.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {categories.map((node) => (
-                <div key={node.id} className="space-y-1">
-                  {node.type === "parent" && (
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      {node.name}
-                    </p>
-                  )}
-                  <div className="space-y-1">
-                    {(node.children && node.children.length ? node.children : [node])
-                      .filter((c) => c.type === "child")
-                      .map((child) => (
-                        <button
-                          key={child.id}
-                          type="button"
-                          onClick={() => setSelectedCategoryId(child.id)}
-                          className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
-                            selectedCategoryId === child.id
-                              ? "border-indigo-500 bg-indigo-500/5"
-                              : "hover:bg-muted"
-                          }`}
-                        >
-                          <span className="text-sm font-medium text-foreground">{child.name}</span>
-                          {selectedCategoryId === child.id && (
-                            <span className="text-[10px] font-medium text-indigo-600">Selected</span>
-                          )}
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (step === 2) {
       return (
         <div className="space-y-4">
           <div className="space-y-1">
@@ -345,7 +341,7 @@ export function UserPollCreatePage() {
       );
     }
 
-    if (step === 3) {
+    if (step === 2) {
       return (
         <div className="space-y-4">
           <div className="space-y-2">
@@ -375,33 +371,66 @@ export function UserPollCreatePage() {
       );
     }
 
-    if (step === 4) {
+    if (step === 3) {
       return (
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
             Configure the choices participants will see. You need at least two options.
           </p>
           <div className="space-y-2">
-            {options.map((o, i) => (
-              <div key={i} className="flex gap-2">
-                <Input
-                  value={o}
-                  onChange={(e) =>
-                    setOptions((prev) => prev.map((v, idx) => (idx === i ? e.target.value : v)))
-                  }
-                  className="text-sm"
-                />
-                {options.length > 2 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => handleRemoveOption(i)}
-                  >
-                    ×
-                  </Button>
-                )}
+            {options.map((opt, i) => (
+              <div
+                key={i}
+                className="flex flex-col gap-2 rounded-lg border bg-background/60 p-2 sm:flex-row sm:items-center"
+              >
+                <div className="flex flex-1 items-center gap-2">
+                  <label className="relative flex h-8 w-8 cursor-pointer items-center justify-center">
+                    {opt.imageUrl.trim() ? (
+                      <img
+                        src={opt.imageUrl}
+                        alt="Option"
+                        className="h-8 w-8 rounded-full border border-slate-200 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-slate-300 text-[10px] text-slate-400">
+                        {uploadingOptionIndex === i ? "..." : "Img"}
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="absolute inset-0 h-0 w-0 opacity-0"
+                      onChange={(e) =>
+                        void handleOptionImagePick(i, e.target.files ? e.target.files[0] : null)
+                      }
+                    />
+                  </label>
+                  <Input
+                    value={opt.label}
+                    onChange={(e) =>
+                      setOptions((prev) =>
+                        prev.map((v, idx) =>
+                          idx === i ? { ...v, label: e.target.value } : v
+                        )
+                      )
+                    }
+                    placeholder={`Option ${i + 1}`}
+                    className="text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  {options.length > 2 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => handleRemoveOption(i)}
+                    >
+                      ×
+                    </Button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -412,7 +441,7 @@ export function UserPollCreatePage() {
       );
     }
 
-    if (step === 5) {
+    if (step === 4) {
       return (
         <div className="space-y-4 text-xs">
           <div className="space-y-1">
@@ -498,7 +527,7 @@ export function UserPollCreatePage() {
       );
     }
 
-    if (step === 6) {
+    if (step === 5) {
       return (
         <div className="space-y-5 text-xs">
           <div className="space-y-1">
@@ -574,24 +603,37 @@ export function UserPollCreatePage() {
             </p>
 
             {shareLink && (
-              <div className="space-y-2 rounded-xl border bg-card p-3">
-                <p className="text-xs font-semibold">Share poll link</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Share this poll link anywhere. People will be asked to log in and accept the
-                  invitation.
-                </p>
-                <div className="flex gap-2">
-                  <Input readOnly value={shareLink} className="text-[11px] font-mono" />
+              <div className="space-y-3 rounded-xl border border-indigo-500/50 bg-gradient-to-r from-indigo-500/10 via-sky-500/5 to-emerald-500/10 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">Public-ready poll link</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Share this link anywhere. People will be guided to log in and accept the
+                      invitation before voting.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <a
+                    href={shareLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 truncate rounded-lg bg-background/70 px-3 py-2 text-[11px] font-mono text-indigo-600 underline decoration-dotted hover:bg-background hover:text-indigo-700 hover:decoration-solid"
+                  >
+                    {shareLink}
+                  </a>
                   <Button
                     type="button"
                     size="sm"
+                    variant="secondary"
+                    className="whitespace-nowrap text-[11px] font-medium"
                     onClick={() => {
                       void navigator.clipboard.writeText(shareLink).catch(() => {
                         // ignore clipboard errors
                       });
                     }}
                   >
-                    Copy
+                    Copy link
                   </Button>
                 </div>
               </div>
@@ -675,7 +717,7 @@ export function UserPollCreatePage() {
                 </Button>
 
                 <div className="flex items-center gap-2">
-                  {step === 6 ? (
+                  {step === 5 ? (
                     <Button
                       type="button"
                       size="sm"
@@ -689,7 +731,7 @@ export function UserPollCreatePage() {
                       type="button"
                       size="sm"
                       disabled={!canGoNext()}
-                      onClick={() => setStep((s) => (s < 6 ? ((s + 1) as WizardStep) : s))}
+                      onClick={() => setStep((s) => (s < 5 ? ((s + 1) as WizardStep) : s))}
                     >
                       Next
                     </Button>

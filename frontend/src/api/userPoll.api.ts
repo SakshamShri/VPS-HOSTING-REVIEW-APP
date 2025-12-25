@@ -8,7 +8,10 @@ export interface CreateUserPollRequest {
   type: UserPollType;
   title: string;
   description?: string | null;
-  options: string[];
+  options: {
+    label: string;
+    image_url?: string | null;
+  }[];
   start_mode: "INSTANT" | "SCHEDULED";
   start_at?: string | null;
   end_at?: string | null;
@@ -107,10 +110,201 @@ export async function createUserPollInvites(
   return data.invites;
 }
 
+export interface MyPollSummary {
+  id: string;
+  title: string;
+  description: string | null;
+  type: UserPollType;
+  status: "DRAFT" | "LIVE" | "SCHEDULED" | "CLOSED";
+  start_at: string | null;
+  end_at: string | null;
+  total_invites: number;
+  accepted_count: number;
+  pending_count: number;
+  rejected_count: number;
+}
+
+export type UserPollInviteStatus = "PENDING" | "ACCEPTED" | "REJECTED";
+
+export interface UserPollInviteSummary {
+  mobile: string;
+  name: string | null;
+  bio: string | null;
+  status: UserPollInviteStatus;
+}
+
+export interface MyPollDetail extends MyPollSummary {
+  invites: UserPollInviteSummary[];
+}
+
+export async function fetchMyPolls(): Promise<MyPollSummary[]> {
+  const token = localStorage.getItem("authToken");
+
+  const res = await fetch(`${API_BASE}/user/polls`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    if (res.status === 401) {
+      throw new Error("AUTH_REQUIRED:" + (data.message || "Please log in to continue"));
+    }
+    throw new Error(data.message || `Failed to load polls (${res.status})`);
+  }
+
+  const data = (await res.json()) as { polls: MyPollSummary[] };
+  return data.polls ?? [];
+}
+
+export async function endUserPoll(id: string): Promise<MyPollSummary> {
+  const token = localStorage.getItem("authToken");
+
+  const res = await fetch(`${API_BASE}/user/polls/${id}/end`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({}),
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    if (res.status === 401) {
+      throw new Error("AUTH_REQUIRED:" + (data.message || "Please log in to continue"));
+    }
+    throw new Error(data.message || `Failed to end poll (${res.status})`);
+  }
+
+  const data = (await res.json()) as { poll: MyPollSummary };
+  return data.poll;
+}
+
+export async function uploadUserPollOptionImage(file: File): Promise<string> {
+  const token = localStorage.getItem("authToken");
+
+  const formData = new FormData();
+  formData.append("image", file);
+
+  const res = await fetch(`${API_BASE}/user/poll-option-images`, {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    if (res.status === 401) {
+      throw new Error("AUTH_REQUIRED:" + (data.message || "Please log in to continue"));
+    }
+    throw new Error(data.message || `Failed to upload option image (${res.status})`);
+  }
+
+  const data = (await res.json()) as { image_url: string };
+  const raw = data.image_url;
+  if (!raw) return raw;
+  // If backend returned a relative /uploads path, convert it to a full URL on the API base
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    return raw;
+  }
+  const base = API_BASE.replace(/\/$/, "");
+  return `${base}${raw}`;
+}
+
+export async function fetchMyPollDetail(id: string): Promise<MyPollDetail> {
+  const token = localStorage.getItem("authToken");
+
+  const res = await fetch(`${API_BASE}/user/polls/${id}`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    if (res.status === 401) {
+      throw new Error("AUTH_REQUIRED:" + (data.message || "Please log in to continue"));
+    }
+    throw new Error(data.message || `Failed to load poll details (${res.status})`);
+  }
+
+  const data = (await res.json()) as { poll: MyPollDetail };
+  return data.poll;
+}
+
+export type UserPollInvitationSummary = {
+  pollId: string;
+  title: string;
+  description: string | null;
+  pollStatus: "DRAFT" | "LIVE" | "SCHEDULED" | "CLOSED";
+  start_at: string | null;
+  end_at: string | null;
+  inviteStatus: UserPollInviteStatus;
+  state: "ONGOING" | "FUTURE" | "EXPIRED";
+  token: string;
+};
+
+export async function fetchMyPollInvitations(): Promise<UserPollInvitationSummary[]> {
+  const token = localStorage.getItem("authToken");
+
+  const res = await fetch(`${API_BASE}/user/poll-invitations`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    if (res.status === 401) {
+      throw new Error("AUTH_REQUIRED:" + (data.message || "Please log in to continue"));
+    }
+    throw new Error(data.message || `Failed to load poll invitations (${res.status})`);
+  }
+
+  const data = (await res.json()) as { invites: UserPollInvitationSummary[] };
+  return data.invites ?? [];
+}
+
+export async function extendUserPoll(id: string, endAtIso: string): Promise<MyPollSummary> {
+  const token = localStorage.getItem("authToken");
+
+  const res = await fetch(`${API_BASE}/user/polls/${id}/extend`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ end_at: endAtIso }),
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    if (res.status === 401) {
+      throw new Error("AUTH_REQUIRED:" + (data.message || "Please log in to continue"));
+    }
+    throw new Error(data.message || `Failed to extend poll (${res.status})`);
+  }
+
+  const data = (await res.json()) as { poll: MyPollSummary };
+  return data.poll;
+}
+
+export interface InviteGroupMemberDTO {
+  mobile: string;
+  name: string | null;
+  bio: string | null;
+}
+
 export interface InviteGroupDTO {
   id: string;
   name: string;
-  members: string[];
+  tags?: string[];
+  photo_url?: string | null;
+  members: InviteGroupMemberDTO[];
 }
 
 export async function fetchInviteGroups(): Promise<InviteGroupDTO[]> {
@@ -133,7 +327,8 @@ export async function fetchInviteGroups(): Promise<InviteGroupDTO[]> {
 
 export async function createInviteGroup(
   name: string,
-  mobiles: string[]
+  members: InviteGroupMemberDTO[],
+  tags: string[]
 ): Promise<InviteGroupDTO> {
   const token = localStorage.getItem("authToken");
 
@@ -143,7 +338,7 @@ export async function createInviteGroup(
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ name, mobiles }),
+    body: JSON.stringify({ name, tags, members }),
   });
 
   if (!res.ok) {
@@ -155,10 +350,43 @@ export async function createInviteGroup(
   return data.group;
 }
 
+export async function uploadInviteGroupPhoto(id: string, file: File): Promise<string> {
+  const token = localStorage.getItem("authToken");
+
+  const formData = new FormData();
+  formData.append("photo", file);
+
+  const res = await fetch(`${API_BASE}/user/groups/${id}/photo`, {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    if (res.status === 401) {
+      throw new Error("AUTH_REQUIRED:" + (data.message || "Please log in to continue"));
+    }
+    throw new Error(data.message || `Failed to upload group photo (${res.status})`);
+  }
+
+  const data = (await res.json()) as { photo_url: string };
+  const raw = data.photo_url;
+  if (!raw) return raw;
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    return raw;
+  }
+  const base = API_BASE.replace(/\/$/, "");
+  return `${base}${raw}`;
+}
+
 export async function updateInviteGroup(
   id: string,
   name: string,
-  mobiles: string[]
+  members: InviteGroupMemberDTO[],
+  tags: string[]
 ): Promise<InviteGroupDTO> {
   const token = localStorage.getItem("authToken");
 
@@ -168,7 +396,7 @@ export async function updateInviteGroup(
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ name, mobiles }),
+    body: JSON.stringify({ name, tags, members }),
   });
 
   if (!res.ok) {
