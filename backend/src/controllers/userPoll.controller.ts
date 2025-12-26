@@ -23,6 +23,7 @@ const createPollSchema = z.object({
   start_at: z.string().datetime().optional().nullable(),
   end_at: z.string().datetime().optional().nullable(),
   source_info: z.string().optional().nullable(),
+  mode: z.enum(["INVITE_ONLY", "OPEN"]).optional().default("INVITE_ONLY"),
 });
 
 const createInvitesSchema = z.object({
@@ -105,6 +106,7 @@ export async function createUserPollHandler(req: AuthenticatedRequest, res: Resp
       startAt,
       endAt,
       sourceInfo: parsed.source_info ?? null,
+      mode: parsed.mode,
     });
 
     return res.status(201).json({
@@ -435,6 +437,39 @@ export async function getUserPollDetailHandler(req: AuthenticatedRequest, res: R
     // eslint-disable-next-line no-console
     console.error(err);
     return res.status(500).json({ message: "Failed to fetch poll details" });
+  }
+}
+
+export async function joinOpenUserPollHandler(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const pollIdParam = req.params.id;
+    if (!pollIdParam) {
+      return res.status(400).json({ message: "Poll id is required" });
+    }
+
+    const pollId = BigInt(pollIdParam);
+    const result = await userPollService.joinOpenPollForUser(req.user.id, pollId);
+
+    return res.status(200).json(result);
+  } catch (err) {
+    const code = (err as any)?.code as string | undefined;
+    if (code === "POLL_NOT_FOUND") {
+      return res.status(404).json({ message: "Poll not found" });
+    }
+    if (code === "POLL_NOT_OPEN") {
+      return res.status(400).json({ message: "Poll is not open" });
+    }
+    if (code === "POLL_NOT_ACTIVE") {
+      return res.status(400).json({ message: "Poll is not active" });
+    }
+
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ message: "Failed to join open poll" });
   }
 }
 

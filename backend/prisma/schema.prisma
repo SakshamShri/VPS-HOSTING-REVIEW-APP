@@ -428,7 +428,7 @@ model UserInviteGroup {
   name       String
   created_at DateTime @default(now())
 
-  tags    String[] @default([])
+  tags    Json?
 
   photo_url String? @db.Text
 

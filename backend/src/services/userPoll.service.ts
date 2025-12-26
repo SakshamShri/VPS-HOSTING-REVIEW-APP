@@ -25,6 +25,7 @@ export interface CreateUserPollInput {
   startAt?: Date | null;
   endAt?: Date | null;
   sourceInfo?: string | null;
+  mode?: "INVITE_ONLY" | "OPEN";
 }
 
 export interface GroupMemberInput {
@@ -116,6 +117,9 @@ export class UserPollService {
 
     await ensureAllowedUserCategory(input.categoryId);
 
+    // Default to invite-only if mode is not specified for backward compatibility
+    const isInviteOnly = (input.mode ?? "INVITE_ONLY") !== "OPEN";
+
     const poll = await prisma.userPoll.create({
       data: {
         creator_id: userId,
@@ -125,7 +129,7 @@ export class UserPollService {
         source_info: input.sourceInfo ?? null,
         type: input.type,
         status,
-        is_invite_only: true,
+        is_invite_only: isInviteOnly,
         start_at: startAt,
         end_at: endAt,
         options: {
@@ -297,6 +301,57 @@ export class UserPollService {
     });
 
     return { token: invite.token };
+  }
+
+  async joinOpenPollForUser(
+    userId: bigint,
+    pollId: bigint,
+  ): Promise<{ token: string; status: UserPollInviteStatus }> {
+    const poll = await prisma.userPoll.findUnique({ where: { id: pollId } });
+
+    if (!poll) {
+      const err = new Error("POLL_NOT_FOUND");
+      (err as any).code = "POLL_NOT_FOUND";
+      throw err;
+    }
+
+    // Only allow join for non invite-only (open) polls
+    if (poll.is_invite_only) {
+      const err = new Error("POLL_NOT_OPEN");
+      (err as any).code = "POLL_NOT_OPEN";
+      throw err;
+    }
+
+    if (!["LIVE", "SCHEDULED"].includes(poll.status as UserPollStatus)) {
+      const err = new Error("POLL_NOT_ACTIVE");
+      (err as any).code = "POLL_NOT_ACTIVE";
+      throw err;
+    }
+
+    // If user already has an invite for this poll, reuse it
+    const existing = await prisma.userPollInvite.findFirst({
+      where: {
+        poll_id: pollId,
+        user_id: userId,
+      },
+    });
+
+    if (existing) {
+      return { token: existing.token, status: existing.status as UserPollInviteStatus };
+    }
+
+    const token = randomUUID();
+    const invite = await prisma.userPollInvite.create({
+      data: {
+        poll_id: pollId,
+        user_id: userId,
+        mobile: `user:${userId.toString()}`,
+        token,
+        status: "PENDING",
+      },
+    });
+
+    return { token: invite.token, status: invite.status as UserPollInviteStatus };
   }
 
   async createInvitesForPoll(

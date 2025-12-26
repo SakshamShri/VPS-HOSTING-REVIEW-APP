@@ -18,6 +18,7 @@ import {
   getUserPollDetailHandler,
   uploadUserPollOptionImageHandler,
   uploadUserGroupPhotoHandler,
+  joinOpenUserPollHandler,
 } from "../controllers/userPoll.controller";
 import { userPollOptionUpload } from "../utils/userPollOptionUpload";
 import { userGroupPhotoUpload } from "../utils/userGroupPhotoUpload";
@@ -49,6 +50,7 @@ userRouter.post("/user/polls/:id/invites", requireUser, createUserPollInvitesHan
 userRouter.post("/user/polls/:id/owner-invite", requireUser, createUserPollOwnerInviteHandler);
 userRouter.post("/user/polls/:id/end", requireUser, endUserPollHandler);
 userRouter.post("/user/polls/:id/extend", requireUser, extendUserPollHandler);
+userRouter.post("/user/open-polls/:id/join", requireUser, joinOpenUserPollHandler);
 userRouter.get("/user/groups", requireUser, listUserGroupsHandler);
 userRouter.post("/user/groups", requireUser, createUserGroupHandler);
 userRouter.patch("/user/groups/:id", requireUser, updateUserGroupHandler);

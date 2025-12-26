@@ -16,6 +16,7 @@ export interface CreateUserPollRequest {
   start_at?: string | null;
   end_at?: string | null;
   source_info?: string | null;
+  mode?: "INVITE_ONLY" | "OPEN";
 }
 
 export interface CreateUserPollResponse {
@@ -45,6 +46,32 @@ export async function createUserPoll(
   }
 
   const data = (await res.json()) as CreateUserPollResponse;
+  return data;
+}
+
+export async function joinOpenUserPoll(
+  pollId: string
+): Promise<{ token: string; status: UserPollInviteStatus }> {
+  const token = localStorage.getItem("authToken");
+
+  const res = await fetch(`${API_BASE}/user/open-polls/${pollId}/join`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({}),
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    if (res.status === 401) {
+      throw new Error("AUTH_REQUIRED:" + (data.message || "Please log in to continue"));
+    }
+    throw new Error(data.message || `Failed to join open poll (${res.status})`);
+  }
+
+  const data = (await res.json()) as { token: string; status: UserPollInviteStatus };
   return data;
 }
 

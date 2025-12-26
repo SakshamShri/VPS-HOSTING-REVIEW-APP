@@ -30,6 +30,8 @@ export function UserPollCreatePage() {
   const [step, setStep] = useState<WizardStep>(1);
   const [pollType, setPollType] = useState<UserPollType | null>("SINGLE_CHOICE");
 
+  const [pollMode, setPollMode] = useState<"INVITE_ONLY" | "OPEN">("INVITE_ONLY");
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [sourceInfo, setSourceInfo] = useState("");
@@ -208,7 +210,16 @@ export function UserPollCreatePage() {
         start_at: startMode === "SCHEDULED" && startAt ? new Date(startAt).toISOString() : null,
         end_at: endAt ? new Date(endAt).toISOString() : null,
         source_info: sourceInfo.trim() || null,
+        mode: pollMode,
       });
+
+      // For open polls, we don't create group/member invites. Just generate a generic share link.
+      if (pollMode === "OPEN") {
+        const baseUrl = window.location.origin;
+        setShareLink(`${baseUrl}/polls/${poll.id}`);
+        setCreatedInvites(null);
+        return;
+      }
 
       const mobilesFromNewGroup = newGroupMobiles
         .split(/\r?\n|,/)
@@ -288,28 +299,48 @@ export function UserPollCreatePage() {
               publish.
             </p>
           </div>
-          {/* Campaign mode row: Open (disabled) vs Invite-only (active) */}
+          {/* Campaign mode row: Open vs Invite-only */}
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col justify-between rounded-xl border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => setPollMode("OPEN")}
+              className={`flex flex-col justify-between rounded-xl border px-4 py-3 text-xs text-left transition-colors ${
+                pollMode === "OPEN"
+                  ? "border-emerald-500 bg-emerald-500/5 text-foreground"
+                  : "border-muted bg-muted/30 text-muted-foreground hover:bg-muted"
+              }`}
+            >
               <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide">Open campaign</p>
-                <p>Anyone with the link can vote.</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide">
+                  Open poll
+                </p>
+                <p>Anyone with the link can join after logging in.</p>
               </div>
-              <p className="mt-2 text-[11px] font-medium text-muted-foreground">
-                Coming soon – only invite-only polls are available right now.
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                No groups or phone numbers needed. Share one link with everyone.
               </p>
-            </div>
-            <div className="flex flex-col justify-between rounded-xl border border-indigo-500 bg-indigo-500/5 px-4 py-3 text-xs">
+            </button>
+            <button
+              type="button"
+              onClick={() => setPollMode("INVITE_ONLY")}
+              className={`flex flex-col justify-between rounded-xl border px-4 py-3 text-xs text-left transition-colors ${
+                pollMode === "INVITE_ONLY"
+                  ? "border-indigo-500 bg-indigo-500/5"
+                  : "border-muted bg-card hover:bg-muted"
+              }`}
+            >
               <div className="space-y-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-600">
-                  Invite-only campaign
+                  Invite-only poll
                 </p>
-                <p className="text-foreground">Only invited participants can vote in this poll.</p>
+                <p className="text-foreground">
+                  Only invited participants can vote in this poll using unique links.
+                </p>
               </div>
-              <p className="mt-2 text-[11px] font-medium text-indigo-600">
-                Enabled for this version.
+              <p className="mt-2 text-[11px] text-indigo-600">
+                Best when you want to control exactly who can vote.
               </p>
-            </div>
+            </button>
           </div>
 
           <div className="space-y-2 pt-1">
@@ -534,67 +565,78 @@ export function UserPollCreatePage() {
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Targeting
             </p>
-            <p className="text-[11px] text-muted-foreground">
-              This poll is invite-only. Choose which groups or individuals should receive a unique
-              invite link.
-            </p>
-          </div>
-
-          <div className="space-y-3 rounded-xl border bg-card p-3">
-            <p className="font-medium">Existing groups</p>
-            {loadingGroups ? (
-              <p className="text-[11px] text-muted-foreground">Loading groups…</p>
-            ) : inviteGroups.length === 0 ? (
+            {pollMode === "INVITE_ONLY" ? (
               <p className="text-[11px] text-muted-foreground">
-                You don't have any groups yet. You can still invite people individually below.
+                This poll is invite-only. Choose which groups or individuals should receive a unique
+                invite link.
               </p>
             ) : (
-              <div className="space-y-1">
-                {inviteGroups.map((g) => (
-                  <label key={g.id} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="h-3 w-3"
-                      checked={selectedGroupIds.includes(g.id)}
-                      onChange={() => handleToggleGroup(g.id)}
-                    />
-                    <span className="text-xs font-medium">{g.name}</span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {g.members.length} members
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <p className="text-[11px] text-muted-foreground">
+                This is an open poll. You don't need to add groups or numbers – just publish and
+                share the single link with anyone.
+              </p>
             )}
           </div>
 
-          <div className="space-y-3 rounded-xl border bg-card p-3">
-            <p className="font-medium">Create new group</p>
-            <Input
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              placeholder="Group name (optional)"
-              className="text-sm"
-            />
-            <Textarea
-              value={newGroupMobiles}
-              onChange={(e) => setNewGroupMobiles(e.target.value)}
-              rows={3}
-              placeholder="Enter mobile numbers, separated by commas or new lines"
-              className="text-sm"
-            />
-          </div>
+          {pollMode === "INVITE_ONLY" && (
+            <>
+              <div className="space-y-3 rounded-xl border bg-card p-3">
+                <p className="font-medium">Existing groups</p>
+                {loadingGroups ? (
+                  <p className="text-[11px] text-muted-foreground">Loading groups…</p>
+                ) : inviteGroups.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    You don't have any groups yet. You can still invite people individually below.
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {inviteGroups.map((g) => (
+                      <label key={g.id} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="h-3 w-3"
+                          checked={selectedGroupIds.includes(g.id)}
+                          onChange={() => handleToggleGroup(g.id)}
+                        />
+                        <span className="text-xs font-medium">{g.name}</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {g.members.length} members
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-          <div className="space-y-3 rounded-xl border bg-card p-3">
-            <p className="font-medium">Individuals</p>
-            <Textarea
-              value={individualMobiles}
-              onChange={(e) => setIndividualMobiles(e.target.value)}
-              rows={3}
-              placeholder="Invite a few people by entering numbers here"
-              className="text-sm"
-            />
-          </div>
+              <div className="space-y-3 rounded-xl border bg-card p-3">
+                <p className="font-medium">Create new group</p>
+                <Input
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  placeholder="Group name (optional)"
+                  className="text-sm"
+                />
+                <Textarea
+                  value={newGroupMobiles}
+                  onChange={(e) => setNewGroupMobiles(e.target.value)}
+                  rows={3}
+                  placeholder="Enter mobile numbers, separated by commas or new lines"
+                  className="text-sm"
+                />
+              </div>
+
+              <div className="space-y-3 rounded-xl border bg-card p-3">
+                <p className="font-medium">Individuals</p>
+                <Textarea
+                  value={individualMobiles}
+                  onChange={(e) => setIndividualMobiles(e.target.value)}
+                  rows={3}
+                  placeholder="Invite a few people by entering numbers here"
+                  className="text-sm"
+                />
+              </div>
+            </>
+          )}
 
           <div className="space-y-4 text-xs">
             <p className="text-muted-foreground">
